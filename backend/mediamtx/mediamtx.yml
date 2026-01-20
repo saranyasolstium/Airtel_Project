@@ -1,0 +1,38 @@
+logLevel: info
+logDestinations:
+- stdout
+rtsp: true
+hls: true
+rtmp: false
+webrtc: false
+srt: false
+hlsAddress: :8888
+hlsVariant: fmp4
+hlsAlwaysRemux: true
+hlsAllowOrigin: '*'
+hlsSegmentDuration: 3s
+hlsSegmentCount: 6
+hlsPartDuration: 750ms
+pathDefaults:
+  sourceOnDemand: false
+paths:
+  92939c0a1be6:
+    source: rtsp://admin:sd123456@fashionislandcctv.ddns.net:554/cam/realmonitor?channel=1&subtype=0
+    sourceOnDemand: false
+    rtspTransport: tcp
+  26bff630381c:
+    source: rtsp://admin:sd123456@fashionislandcctv.ddns.net:554/cam/realmonitor?channel=2&subtype=0
+    sourceOnDemand: false
+    rtspTransport: tcp
+  cam-92939c0a1b:
+    source: rtsp://admin:sd123456@fashionislandcctv.ddns.net:554/cam/realmonitor?channel=1&subtype=0
+    sourceOnDemand: false
+    rtspTransport: tcp
+  cam-26bff63038:
+    source: rtsp://admin:sd123456@fashionislandcctv.ddns.net:554/cam/realmonitor?channel=2&subtype=0
+    sourceOnDemand: false
+    rtspTransport: tcp
+  cam-091c1c4d0f:
+    source: rtsp://admin:sd123456@fashionislandcctv.ddns.net:554/cam/realmonitor?channel=3&subtype=0
+    sourceOnDemand: false
+    rtspTransport: tcp
