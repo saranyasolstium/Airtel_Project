@@ -5,7 +5,7 @@ import logging
 from app.config import settings
 from app.database import engine, Base
 
-from app.routes import cameras_router, vehicle_logs_router, hls_router, traffic_flow_router
+from app.routes import cameras_router, vehicle_logs_router, hls_router, traffic_flow_router, auth_router
 
 
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +28,7 @@ app.add_middleware(
 )
 
 # Routers
+app.include_router(auth_router, prefix="/api")
 app.include_router(cameras_router, prefix="/api")
 app.include_router(vehicle_logs_router, prefix="/api")
 app.include_router(hls_router, prefix="/api")

@@ -7,6 +7,12 @@ from urllib.parse import quote_plus
 # Load environment variables from .env file
 load_dotenv()
 
+JWT_SECRET_KEY = os.getenv(
+    "JWT_SECRET_KEY", "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET")
+JWT_ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+
 
 class Settings(BaseSettings):
     # MySQL Individual Components
