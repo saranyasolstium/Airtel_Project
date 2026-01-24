@@ -1,0 +1,569 @@
+/* src/styles/cameras.css */
+
+/* page background should already be your app bg.
+   This page uses glass panels similar to Alerts */
+
+.pageShell {
+  padding: 22px 22px 40px;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.pageTitle {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: #ffffff;
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.pageSub {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
+.rightPills {
+  display: flex;
+  gap: 10px;
+}
+
+.pill {
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.pillOk {
+  background: rgba(20, 40, 25, 0.35);
+  color: #b6ffce;
+}
+
+.pillWarn {
+  background: rgba(55, 40, 15, 0.35);
+  color: #ffd7a6;
+}
+
+.glassPanel {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  padding: 16px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(10, 12, 16, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 320px;
+  flex: 1;
+}
+
+.searchBox input {
+  border: none;
+  outline: none;
+  width: 100%;
+  background: transparent;
+  color: #fff;
+  font-size: 14px;
+}
+
+.btnRow {
+  display: flex;
+  gap: 10px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btnPrimary {
+  background: linear-gradient(135deg, rgba(220, 30, 40, 0.95), rgba(180, 10, 20, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.btnPrimary:hover {
+  background: linear-gradient(135deg, rgba(240, 40, 55, 0.95), rgba(200, 15, 30, 0.95));
+}
+
+.btnGhost {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.btnDanger {
+  background: rgba(220, 30, 40, 0.9);
+}
+
+.sectionTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 2px 14px;
+}
+
+.sectionTitle {
+  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.muted {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 12px;
+}
+
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 1200px) {
+  .grid3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .grid3 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}
+
+.centerBox {
+  padding: 50px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #fff;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Card */
+.camCard {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(10, 12, 16, 0.35);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+}
+
+.camCardTop {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+}
+
+.camCardBody {
+  padding: 12px 12px 14px;
+}
+
+.camName {
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.camMetaRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.camCardId {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 6px 10px;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.camCardActions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.iconBtnSmall {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.iconBtnSmall:hover {
+  background: rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+.iconBtnSmall:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.iconBtnSmall.danger {
+  background: rgba(220, 30, 40, 0.35);
+  border-color: rgba(220, 30, 40, 0.55);
+}
+
+/* Preview */
+.camPreview {
+  position: absolute;
+  inset: 0;
+}
+
+.camVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+
+.camEmpty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.camEmptyIcon {
+  opacity: 0.8;
+}
+
+.camEmptyText {
+  margin-top: 8px;
+  font-weight: 800;
+}
+
+.camEmptySub {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.camBadge {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+}
+
+.badge {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+}
+
+.badgeLive {
+  background: rgba(0, 160, 70, 0.35);
+  border-color: rgba(0, 160, 70, 0.55);
+}
+
+.badgeLoading {
+  background: rgba(240, 170, 40, 0.25);
+  border-color: rgba(240, 170, 40, 0.40);
+}
+
+.badgeOff {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+/* Overlay modal */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.modalTopBar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.modalTitle {
+  color: #fff;
+  font-weight: 900;
+}
+
+.modalSub {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.modalBody {
+  position: absolute;
+  inset: 56px 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+
+.modalPlayer {
+  width: min(1100px, 100%);
+  height: min(680px, 100%);
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #000;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+}
+
+.modalVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.modalEmpty {
+  width: 100%;
+  height: 100%;
+  color: rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Popup */
+.popupOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.popup {
+  width: min(680px, 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(20, 22, 28, 0.86);
+  color: #fff;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+}
+
+.popupSmall {
+  width: min(520px, 100%);
+}
+
+.popupHeader {
+  padding: 14px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.popupHeaderTitle {
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.popupBody {
+  padding: 14px;
+}
+
+.popupFooter {
+  padding: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.iconBtn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+}
+
+.iconBtn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 10px 12px;
+  font-size: 13px;
+}
+
+.k {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.v {
+  color: #fff;
+  font-weight: 700;
+}
+
+.monoBox {
+  margin: 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.formRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.formRow label {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.input {
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  outline: none;
+}
+
+.input:focus {
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.input.error {
+  border-color: rgba(240, 80, 80, 0.6);
+}
+
+.fieldError {
+  color: #ffb0b0;
+  font-size: 12px;
+}
+
+.inlineError {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(240, 80, 80, 0.12);
+  border: 1px solid rgba(240, 80, 80, 0.22);
+  color: #ffd5d5;
+  font-size: 12px;
+}
+
+.warnRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(240, 80, 80, 0.10);
+  border: 1px solid rgba(240, 80, 80, 0.18);
+}

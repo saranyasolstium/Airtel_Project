@@ -5,7 +5,7 @@ import os
 import json
 import numpy as np
 
-RTSP_URL = "https://api.vms.solstium.net/hls/df3e2570e7/index.m3u8"
+RTSP_URL = "rtsp://admin:sd123456@fashionislandcctv.ddns.net:554/cam/realmonitor?channel=1&subtype=0"
 OUT_JSON = "zone_points.json"
 
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (

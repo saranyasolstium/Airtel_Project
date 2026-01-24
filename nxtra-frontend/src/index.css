@@ -1,0 +1,10 @@
+:root {
+  --nxtra-red: #e31b23;
+  --nxtra-red-dark: #b81218;
+
+  --glass: rgba(255, 255, 255, 0.10);
+  --glass-border: rgba(255, 255, 255, 0.14);
+
+  --muted: rgba(255, 255, 255, 0.72);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}

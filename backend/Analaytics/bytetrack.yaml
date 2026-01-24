@@ -1,0 +1,9 @@
+tracker_type: bytetrack
+
+track_high_thresh: 0.7
+track_low_thresh: 0.15
+new_track_thresh: 0.8
+
+track_buffer: 300 # keep lost tracks longer (~10s @30fps). Increase to 600 if needed
+match_thresh: 0.9
+fuse_score: true

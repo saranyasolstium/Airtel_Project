@@ -1,0 +1,11 @@
+{
+  "ts_utc": "2026-01-23T12:41:08.106654",
+  "frame_idx": 58,
+  "track_id": 1,
+  "plate_text": null,
+  "plate_det_conf": 0.0,
+  "all_valid_reads": [],
+  "car_path": "C:\\Users\\saran\\Desktop\\Solstium_Project\\Airtel_Project\\backend\\Analaytics\\car_captures_final\\car_20260123_181108_102644_UNKNOWN.jpg",
+  "plate_path": null,
+  "combined_path": "C:\\Users\\saran\\Desktop\\Solstium_Project\\Airtel_Project\\backend\\Analaytics\\car_captures_final\\combined_20260123_181108_084403_UNKNOWN.jpg"
+}

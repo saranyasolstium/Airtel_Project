@@ -1,0 +1,27 @@
+:root {
+  /* Brand */
+  --nxtra-red: #E31B23;
+  --nxtra-red-dark: #B8141A;
+
+  /* Text */
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.70);
+
+  /* Glass */
+  --glass: rgba(74, 81, 103, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --field: rgba(255, 255, 255, 0.14);
+  --field-border: rgba(255, 255, 255, 0.16);
+
+  /* Shadows */
+  --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+a { color: inherit; }

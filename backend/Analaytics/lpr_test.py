@@ -1,746 +1,373 @@
-import queue
-import threading
-import numpy as np
-import requests
-import secrets
-import base64
-import time
-import cv2
-import re
 import os
-import pandas as pd
-from dataclasses import dataclass, field
-from datetime import datetime
+import re
+import cv2
+import json
+import time
+import numpy as np
+from dataclasses import dataclass
 from typing import List, Tuple, Optional, Dict
-from pathlib import Path
-
-from ultralytics import YOLO
+from datetime import datetime
 from dotenv import load_dotenv
-import easyocr
-
-# Import for better OCR
-import io
-from collections import deque, defaultdict
+from ultralytics import YOLO
+from paddleocr import PaddleOCR
 
 # -------------------- env/threads --------------------
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["OMP_NUM_THREADS"] = "4"
 load_dotenv()
 
-# -------------------- India Plate Validation --------------------
+# -------------------- source & paths -----------------
+# <— set your MP4 / RTSP
+VIDEO_PATH = "https://api.vms.solstium.net/hls/df3e2570e7/index.m3u8"
+LOOP_VIDEO = True
+SHOW_PREVIEW = True
 
-
-def validate_india_plate(plate_text: str, is_bike: bool = False) -> Tuple[bool, str]:
-    """
-    Validate Indian vehicle plate numbers.
-
-    India plate formats:
-    For Cars/Trucks/Buses:
-    1. Standard format: DL01AB1234 (2 letters state, 2 digits district, 2 letters series, 4 digits)
-    2. BH series: BH01AB1234 (Bharat series for inter-state)
-    3. Commercial: DL01C12345 (C for commercial)
-    4. Temporary: DL01TR1234 (TR for temporary)
-
-    For Motorcycles (Bikes):
-    1. Same format as cars but typically 4 digits at the end
-    2. Example: DL01AB1234 (for bikes too)
-
-    Military/Government:
-    1. Military: DLD123456
-    2. Government vehicles have blue plates
-    """
-    if not plate_text:
-        return False, "Empty plate"
-
-    plate = plate_text.upper().strip()
-
-    # Remove spaces and special characters
-    plate = re.sub(r'[^A-Z0-9]', '', plate)
-
-    if len(plate) < 7:
-        return False, "Too short (min 7 chars)"
-
-    # List of Indian state codes (partial list)
-    state_codes = [
-        'AN', 'AP', 'AR', 'AS', 'BR', 'CH', 'CT', 'DL', 'DN', 'GA',
-        'GJ', 'HR', 'HP', 'JH', 'JK', 'KA', 'KL', 'LD', 'MH', 'ML',
-        'MN', 'MP', 'MZ', 'NL', 'OD', 'PB', 'PY', 'RJ', 'SK', 'TN',
-        'TR', 'TS', 'UP', 'UK', 'WB'
-    ]
-
-    # Special series
-    special_series = ['BH', 'CH', 'DH', 'TS', 'TR', 'SR']
-
-    # Check format patterns
-    patterns = [
-        # Standard format: XX##XX#### (e.g., DL01AB1234)
-        r'^([A-Z]{2})(\d{2})([A-Z]{1,2})(\d{4})$',
-
-        # Format with 3 letters in series: XX###X####
-        r'^([A-Z]{2})(\d{2})([A-Z]{2,3})(\d{4})$',
-
-        # BH series: BH##XX####
-        r'^(BH)(\d{2})([A-Z]{1,2})(\d{4})$',
-
-        # Commercial vehicles: XX##X##### (5 digits)
-        r'^([A-Z]{2})(\d{2})([A-Z]{1})(\d{5})$',
-
-        # Older format or special cases
-        r'^([A-Z]{2})(\d{1,4})([A-Z]{0,3})(\d{1,4})$',
-    ]
-
-    for pattern in patterns:
-        match = re.match(pattern, plate)
-        if match:
-            # Check if state code is valid
-            state_code = match.group(1)
-            if pattern == patterns[0] or pattern == patterns[1]:
-                if state_code not in state_codes and state_code not in special_series:
-                    continue
-
-            # Validate district code (should be 01-99)
-            if len(match.groups()) > 1:
-                district_code = match.group(2)
-                if not district_code.isdigit():
-                    continue
-                district_num = int(district_code)
-                if district_num < 1 or district_num > 99:
-                    continue
-
-            return True, f"Valid India {vehicle_type} plate"
-
-    # If no pattern matches but looks plausible
-    letters = sum(1 for c in plate if c.isalpha())
-    digits = sum(1 for c in plate if c.isdigit())
-
-    if letters >= 2 and digits >= 2:
-        return True, "Plausible India plate (manual review)"
-
-    return False, "Invalid India plate format"
-
-
-# -------------------- Rapido OCR Configuration --------------------
-# Initialize EasyOCR reader for Indian plates
-# Using English only as Indian plates use Latin characters
-try:
-    reader = easyocr.Reader(['en'], gpu=False)  # Set gpu=True if you have CUDA
-    print("EasyOCR initialized successfully")
-except Exception as e:
-    print(f"Error initializing EasyOCR: {e}")
-    reader = None
-
-# -------------------- files/paths --------------------
-RTSP_URL = "rtsp://admin:Solstium@3042@10.34.157.12:15541/Streaming/Channels/102/"
-OUTPUT_DIR = "car_captures_final"
+BASE_DIR = os.path.dirname(__file__)
+OUTPUT_DIR = os.path.join(BASE_DIR, "car_captures_final")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-ACCEPTED_DIR = os.path.join(OUTPUT_DIR, "accepted")
-os.makedirs(ACCEPTED_DIR, exist_ok=True)
-
-# -------------------- Excel Storage for API Hits --------------------
-
-
-class APIExcelStorage:
-    def __init__(self, output_dir="car_captures_final"):
-        self.output_dir = output_dir
-        self.excel_path = os.path.join(output_dir, "api_hits.xlsx")
-        self.columns = ["timestamp", "plate_number", "api_status", "http_status",
-                        "response_text", "image_path", "vehicle_type", "confidence",
-                        "validation_result", "is_bike", "ocr_method"]
-        self.df = pd.DataFrame(columns=self.columns)
-
-        if os.path.exists(self.excel_path):
-            self.df = pd.read_excel(self.excel_path)
-            print(f"Loaded existing API hits from {self.excel_path}")
-        else:
-            print(f"Creating new API hits storage at {self.excel_path}")
-
-    def add_record(self, plate_number: str, api_status: str, http_status: Optional[int] = None,
-                   response_text: Optional[str] = None, image_path: Optional[str] = None,
-                   vehicle_type: Optional[str] = None, confidence: Optional[float] = None,
-                   validation_result: Optional[str] = None, is_bike: bool = False, ocr_method: str = "easyocr"):
-        """Add a record to the Excel file"""
-        record = {
-            "timestamp": datetime.now().isoformat(),
-            "plate_number": plate_number,
-            "api_status": api_status,
-            "http_status": http_status,
-            "response_text": str(response_text)[:200] if response_text else "",
-            "image_path": image_path,
-            "vehicle_type": vehicle_type,
-            "confidence": confidence,
-            "validation_result": validation_result or "",
-            "is_bike": is_bike,
-            "ocr_method": ocr_method
-        }
-
-        self.df = pd.concat(
-            [self.df, pd.DataFrame([record])], ignore_index=True)
-
-        try:
-            self.df.to_excel(self.excel_path, index=False)
-            print(f"Saved API hit to Excel: {plate_number} - {api_status}")
-        except Exception as e:
-            print(f"Error saving to Excel: {e}")
-
-    def get_stats(self) -> Dict:
-        """Get basic statistics from stored data"""
-        if self.df.empty:
-            return {"total_hits": 0, "successful": 0, "failed": 0, "bikes": 0, "cars": 0}
-
-        total = len(self.df)
-        successful = len(self.df[self.df["api_status"] == "success"])
-        failed = total - successful
-        bikes = len(self.df[self.df["is_bike"] == True])
-        cars = len(self.df[self.df["is_bike"] == False])
-
-        return {
-            "total_hits": total,
-            "successful": successful,
-            "failed": failed,
-            "bikes": bikes,
-            "cars": cars,
-            "last_plate": self.df.iloc[-1]["plate_number"] if total > 0 else None,
-            "last_timestamp": self.df.iloc[-1]["timestamp"] if total > 0 else None
-        }
-
-
-api_storage = APIExcelStorage()
-
-# -------------------- Simple Statistics --------------------
-
-
-class SimpleStats:
-    def __init__(self):
-        self.start_time = time.time()
-        self.easyocr_calls = 0
-        self.successful_ocr = 0
-        self.failed_ocr = 0
-        self.validated_plates = 0
-        self.rejected_plates = 0
-        self.vehicles_detected = defaultdict(int)
-        self.plates_detected = []
-
-    def update_excel_stats(self):
-        """Update statistics in Excel file"""
-        stats = api_storage.get_stats()
-        return f"API Hits: {stats['successful']}/{stats['total_hits']} successful, Bikes: {stats['bikes']}, Cars: {stats['cars']}"
-
-
-stats = SimpleStats()
-
 # -------------------- models ------------------------
-car_model = YOLO("yolov8n.pt")   # vehicle detector + tracker
+car_model = YOLO("yolov8n.pt")    # vehicle detector + tracker
+plate_model = YOLO("best.pt")     # your license plate detector
+
+print("[INFO] Initializing PaddleOCR...")
+paddle_ocr = PaddleOCR(use_angle_cls=True, lang='en')
+print("[INFO] PaddleOCR ready.")
 
 # -------------------- tracker -----------------------
-TRACKER_CFG = "bytetrack.yaml"
+TRACKER_CFG = os.path.join(BASE_DIR, "bytetrack.yaml")
 
 # -------------------- thresholds --------------------
-CONFIDENCE_THRESHOLD = 0.35
+CONFIDENCE_THRESHOLD = 0.35        # vehicle det
+# plate detection confidence gate (recommended >=0.5)
+PLATE_DET_MIN_CONF = 0.20
+PLATE_OCR_MIN_CONF = 0.20          # OCR confidence threshold
+PLATE_GREEN_CONF = 0.90            # box color
+PLATE_YELLOW_CONF = 0.80
 PROCESS_EVERY_N_FRAMES = 2
 
-RECONNECT_DELAY_SEC = 5
-MAX_RECONNECT_ATTEMPTS = 10
+MIN_CAR_AR, MAX_CAR_AR = 1.0, 4.0  # aspect ratio gates
+MIN_CAR_AREA = 3500
 
-# Attempt spacing
-MIN_SECONDS_BETWEEN_OCR = 0.8
-MAX_OCR_ATTEMPTS_PER_TRACK = 3
+# -------------------- tripwire -----------------------
+TRIPWIRE_Y_NORM = 0.75
+TRIPWIRE_THICKNESS = 4
+TRIPWIRE_COLOR = (0, 255, 255)
+TRIPWIRE_NAME = "Capture Zone"
 
-# geometry gates
-MIN_CAR_AR, MAX_CAR_AR = 1.0, 4.0
-MIN_BIKE_AR, MAX_BIKE_AR = 0.5, 2.5
-MIN_CAR_AREA = 1500
-MIN_BIKE_AREA = 800
+# -------------------- India plate validation --------
+# State/UT codes (common + full set)
+STATE_CODES = {
+    "AN", "AP", "AR", "AS", "BR", "CG", "CH", "DD", "DL", "DN", "GA", "GJ", "HP", "HR", "JH", "JK",
+    "KA", "KL", "LA", "LD", "MH", "ML", "MN", "MP", "MZ", "NL", "OD", "PB", "PY", "RJ", "SK", "TN",
+    "TR", "TS", "UK", "UP", "WB"
+}
 
-# Zone polygon
-ZONE_POINTS = np.array([[2, 205], [320, 53], [504, 107],
-                        [370, 351], [4, 358], [8, 203]], np.int32)
+# Standard (very common) formats:
+#   TN01AB1234
+#   TN01A1234
+#   TN01AB123
+STD_PLATE_RE = re.compile(r"^([A-Z]{2})(\d{1,2})([A-Z]{1,3})(\d{3,4})$")
 
-# -------------------- Image Quality Functions --------------------
+# BH plates:
+#   21BH1234AA  or  21BH1234A  (some variations exist in the wild)
+BH_PLATE_RE = re.compile(r"^(\d{2})BH(\d{4})([A-Z]{1,2})$")
 
 
-def should_process_for_ocr(car_image: np.ndarray) -> bool:
-    """Check if image is good enough for OCR."""
-    if car_image is None or car_image.size == 0:
+def _clean_alnum(text: str) -> str:
+    if not text:
+        return ""
+    text = text.upper().strip()
+    text = text.replace(" ", "").replace("-", "")
+    return re.sub(r"[^A-Z0-9]", "", text)
+
+
+def generate_plate_variants(raw: str) -> List[str]:
+    """
+    Create a few plausible variants without destroying state codes.
+    Only apply ambiguous swaps in likely numeric regions.
+    """
+    s = _clean_alnum(raw)
+    if len(s) < 6 or len(s) > 12:
+        return [s]
+
+    # ambiguous maps
+    amb_letter_to_digit = {"O": "0", "Q": "0", "D": "0",
+                           "I": "1", "L": "1", "Z": "2", "S": "5", "B": "8", "G": "6"}
+    amb_digit_to_letter = {"0": "O", "1": "I",
+                           "2": "Z", "5": "S", "8": "B", "6": "G"}
+
+    variants = {s}
+
+    # If last 4 chars should be digits, try letter->digit there
+    if len(s) >= 4:
+        tail = s[-4:]
+        fixed_tail = "".join([amb_letter_to_digit.get(ch, ch) for ch in tail])
+        variants.add(s[:-4] + fixed_tail)
+
+    # If starts with digits and looks like BH, try digit->letter in suffix
+    if "BH" in s and len(s) >= 10:
+        # Fix last 1-2 chars to letters if digits
+        suffix = s[-2:]
+        fixed_suffix = "".join(
+            [amb_digit_to_letter.get(ch, ch) for ch in suffix])
+        variants.add(s[:-2] + fixed_suffix)
+
+    # Light global attempt (very conservative): only O/Q->0 everywhere
+    variants.add(s.replace("O", "0").replace("Q", "0"))
+
+    # Remove duplicates & bad lengths
+    out = []
+    for v in variants:
+        v = _clean_alnum(v)
+        if 6 <= len(v) <= 12:
+            out.append(v)
+    return list(dict.fromkeys(out))
+
+
+def is_valid_india_plate(text: str) -> bool:
+    s = _clean_alnum(text)
+    if not (6 <= len(s) <= 12):
         return False
 
-    h, w = car_image.shape[:2]
-    if w < 100 or h < 50:
+    # BH
+    m = BH_PLATE_RE.match(s)
+    if m:
+        yy = int(m.group(1))
+        # sanity on year (00..99 ok) - keep permissive
+        return True
+
+    # Standard
+    m = STD_PLATE_RE.match(s)
+    if not m:
         return False
 
-    if is_image_blurry(car_image, threshold=80.0):
-        return False
-
-    gray = cv2.cvtColor(car_image, cv2.COLOR_BGR2GRAY)
-    brightness = np.mean(gray)
-    if brightness < 40 or brightness > 200:
+    st = m.group(1)
+    if st not in STATE_CODES:
         return False
 
     return True
 
 
-def sharpness_score(img_bgr: np.ndarray) -> float:
-    try:
-        g = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        return float(cv2.Laplacian(g, cv2.CV_64F).var())
-    except Exception:
-        return 0.0
-
-
-def is_image_blurry(img: np.ndarray, threshold: float = 100.0) -> bool:
-    """Check if image is too blurry for OCR"""
-    try:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-        return laplacian_var < threshold
-    except Exception:
-        return True
-
-
-def enhance_for_ocr(car_bgr: np.ndarray) -> np.ndarray:
-    """Enhance the entire car image for better plate reading."""
-    try:
-        h, w = car_bgr.shape[:2]
-        if w < 400:
-            scale = 400 / w
-            new_w = 400
-            new_h = int(h * scale)
-            car_bgr = cv2.resize(car_bgr, (new_w, new_h),
-                                 interpolation=cv2.INTER_CUBIC)
-
-        # Apply CLAHE for better contrast
-        lab = cv2.cvtColor(car_bgr, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        l = clahe.apply(l)
-        lab = cv2.merge([l, a, b])
-        enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-
-        # Light denoising
-        enhanced = cv2.bilateralFilter(enhanced, 5, 75, 75)
-        return enhanced
-    except Exception:
-        return car_bgr
-
-
-def preprocess_plate_image(image: np.ndarray) -> np.ndarray:
-    """Preprocess image specifically for plate detection"""
-    # Convert to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Apply adaptive thresholding
-    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                   cv2.THRESH_BINARY, 11, 2)
-
-    # Apply morphological operations to clean up
-    kernel = np.ones((1, 1), np.uint8)
-    processed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-
-    # Resize if too small
-    if processed.shape[1] < 200:
-        scale = 200 / processed.shape[1]
-        new_width = 200
-        new_height = int(processed.shape[0] * scale)
-        processed = cv2.resize(processed, (new_width, new_height),
-                               interpolation=cv2.INTER_CUBIC)
-
-    return processed
-
-# -------------------- EasyOCR Plate Reading --------------------
-
-
-def read_plate_easyocr(car_bgr: np.ndarray, is_bike: bool = False) -> Optional[str]:
+def normalize_to_best_india_plate(raw: str) -> Optional[str]:
     """
-    Read license plate using EasyOCR with multiple strategies.
+    Returns best normalized plate if any variant matches India rules.
     """
-    if reader is None or car_bgr is None or car_bgr.size == 0:
-        return None
+    for v in generate_plate_variants(raw):
+        if is_valid_india_plate(v):
+            return v
+    return None
+
+# -------------------- OCR helpers --------------------
+
+
+def run_paddle_ocr_on_mat(img_mat: np.ndarray) -> Tuple[Optional[str], float]:
+    """
+    Returns: (best_text, best_conf)
+    """
+    if img_mat is None or img_mat.size == 0:
+        return None, 0.0
 
     try:
-        stats.easyocr_calls += 1
-
-        # Strategy 1: Read from entire car image
-        results = reader.readtext(car_bgr,
-                                  paragraph=False,
-                                  width_ths=0.7,
-                                  height_ths=0.7,
-                                  ycenter_ths=0.5)
-
-        plate_candidates = []
-
-        for (bbox, text, confidence) in results:
-            text = text.upper().strip()
-
-            # Clean the text
-            text = re.sub(r'[^A-Z0-9]', '', text)
-
-            if len(text) < 5:  # Minimum length for Indian plates
-                continue
-
-            # Check if it looks like a plate
-            letters = sum(1 for c in text if c.isalpha())
-            digits = sum(1 for c in text if c.isdigit())
-
-            if letters >= 2 and digits >= 2:  # Minimum requirements
-                plate_candidates.append((text, confidence))
-
-        # Strategy 2: Try with preprocessed image
-        if not plate_candidates:
-            processed = preprocess_plate_image(car_bgr)
-            results = reader.readtext(processed,
-                                      paragraph=False,
-                                      width_ths=0.7,
-                                      height_ths=0.7)
-
-            for (bbox, text, confidence) in results:
-                text = text.upper().strip()
-                text = re.sub(r'[^A-Z0-9]', '', text)
-
-                if len(text) >= 5:
-                    letters = sum(1 for c in text if c.isalpha())
-                    digits = sum(1 for c in text if c.isdigit())
-
-                    if letters >= 2 and digits >= 2:
-                        plate_candidates.append((text, confidence))
-
-        # Strategy 3: Try different image regions
-        if not plate_candidates:
-            h, w = car_bgr.shape[:2]
-
-            # Check bottom region (where plates usually are)
-            bottom_region = car_bgr[int(h*0.6):h, :]
-            if bottom_region.size > 0:
-                results = reader.readtext(bottom_region,
-                                          paragraph=False,
-                                          width_ths=0.7,
-                                          height_ths=0.7)
-
-                for (bbox, text, confidence) in results:
-                    text = text.upper().strip()
-                    text = re.sub(r'[^A-Z0-9]', '', text)
-
-                    if len(text) >= 5:
-                        letters = sum(1 for c in text if c.isalpha())
-                        digits = sum(1 for c in text if c.isdigit())
-
-                        if letters >= 2 and digits >= 2:
-                            plate_candidates.append((text, confidence))
-
-        # Select best candidate
-        if plate_candidates:
-            # Sort by confidence
-            plate_candidates.sort(key=lambda x: x[1], reverse=True)
-            best_plate, best_conf = plate_candidates[0]
-
-            print(f"EasyOCR candidate: {best_plate} (conf: {best_conf:.2f})")
-
-            # Validate with India plate rules
-            is_valid, reason = validate_india_plate(best_plate, is_bike)
-
-            if is_valid:
-                stats.successful_ocr += 1
-                stats.validated_plates += 1
-                stats.plates_detected.append({
-                    "plate": best_plate,
-                    "timestamp": datetime.now().isoformat(),
-                    "source": "easyocr",
-                    "is_bike": is_bike,
-                    "validation": reason,
-                    "confidence": best_conf
-                })
-
-                print(
-                    f"EasyOCR successful: {best_plate} (conf: {best_conf:.2f}) - {reason}")
-                return best_plate
-            else:
-                print(f"Invalid India plate: {best_plate} - {reason}")
-                stats.failed_ocr += 1
-                stats.rejected_plates += 1
-                return None
+        # Preprocess
+        if len(img_mat.shape) == 3:
+            gray = cv2.cvtColor(img_mat, cv2.COLOR_BGR2GRAY)
         else:
-            stats.failed_ocr += 1
-            print("EasyOCR: No plate candidates found")
-            return None
+            gray = img_mat
+
+        gray = cv2.equalizeHist(gray)
+        gray = cv2.GaussianBlur(gray, (3, 3), 0)
+        processed_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+
+        result = paddle_ocr.ocr(processed_img, cls=True)
+        if not result or not result[0]:
+            return None, 0.0
+
+        candidates: List[Tuple[str, float]] = []
+        for line in result:
+            if not line:
+                continue
+            for det in line:
+                if not det or len(det) < 2:
+                    continue
+                bbox, (text, conf) = det
+                if not text or conf is None:
+                    continue
+                cleaned = _clean_alnum(text)
+                if len(cleaned) < 6:
+                    continue
+
+                # Try to normalize to valid India plate
+                norm = normalize_to_best_india_plate(cleaned)
+                if norm:
+                    candidates.append((norm, float(conf)))
+                else:
+                    # keep as fallback candidate only if it looks plate-ish
+                    if 6 <= len(cleaned) <= 12:
+                        # penalize non-validated
+                        candidates.append((cleaned, float(conf) * 0.70))
+
+        if not candidates:
+            return None, 0.0
+
+        # pick best by confidence (and slightly prefer longer)
+        candidates.sort(key=lambda x: (
+            x[1] + (len(x[0]) * 0.01)), reverse=True)
+        best_text, best_conf = candidates[0]
+
+        # Apply OCR conf gate (but allow slightly lower if valid India plate)
+        if is_valid_india_plate(best_text):
+            if best_conf >= (PLATE_OCR_MIN_CONF - 0.10):
+                return best_text, best_conf
+        else:
+            if best_conf >= PLATE_OCR_MIN_CONF:
+                return best_text, best_conf
+
+        return None, 0.0
 
     except Exception as e:
-        print(f"EasyOCR error: {e}")
-        stats.failed_ocr += 1
-        return None
+        print(f"❌ OCR error: {e}")
+        return None, 0.0
 
-# -------------------- Utils --------------------
+# -------------------- IO helpers ---------------------
 
 
 def open_stream():
-    cap = cv2.VideoCapture(RTSP_URL)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    cap.set(cv2.CAP_PROP_FPS, 15)
+    cap = cv2.VideoCapture(VIDEO_PATH)
+    if not cap.isOpened():
+        print("❌ Cannot open video:", VIDEO_PATH)
     return cap
 
 
-def restart(cap):
-    print("Restarting stream...")
-    cap.release()
-    time.sleep(RECONNECT_DELAY_SEC)
-    return open_stream()
+def _fname(prefix: str, plate_text: Optional[str], ext="jpg"):
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    safe = re.sub(r"[^A-Za-z0-9]+", "", (plate_text or "UNKNOWN"))
+    return f"{prefix}_{ts}_{safe}.{ext}"
 
 
-def zone_contains(cx, cy) -> bool:
-    return cv2.pointPolygonTest(ZONE_POINTS, (float(cx), float(cy)), False) >= 0
+def save_car(frame, bbox, plate_text=None):
+    x1, y1, x2, y2 = [int(v) for v in bbox]
+    crop = frame[y1:y2, x1:x2].copy()
+    fp = os.path.join(OUTPUT_DIR, _fname("car", plate_text))
+    cv2.imwrite(fp, crop)
+    return fp
 
 
-# -------------------- API push --------------------
-API_URL = "https://visitormanagement.solstium.net/security_monitoring/api/admin/store_feed"
+def save_plate_crop(plate_bgr: np.ndarray, plate_text: Optional[str]) -> Optional[str]:
+    if plate_bgr is None or plate_bgr.size == 0:
+        return None
+    fp = os.path.join(OUTPUT_DIR, _fname("plate", plate_text))
+    cv2.imwrite(fp, plate_bgr)
+    return fp
 
 
-def push_api_base64(img64: str, plate: Optional[str], is_bike: bool = False):
-    try:
-        vehicle_class = "motorcycle" if is_bike else "car/truck"
-        payload = {
-            "_id": secrets.token_hex(8),
-            "object_classification": f"India {vehicle_class}, p:88.0%",
-            "type": "license_plate",
-            "uiType": "license_plate",
-            "time": int(time.time() * 1000),
-            "feedName": "Visitor Lane",
-            "feedId": "",
-            "locationId": "26f697c540f2015daf77f4a",
-            "locationName": "Skywood",
-            "license_plate_number": (plate or "UNKNOWN"),
-            "timezone": "Skywood",
-            "image_base64": img64,
-            "vehicle_type": "motorcycle" if is_bike else "car",
-            "country": "India"
-        }
-        r = requests.post(API_URL, json=payload, timeout=15)
-        print(f"API: {r.status_code} {r.text[:120]}")
-
-        if r.status_code == 200:
-            api_storage.add_record(
-                plate_number=plate or "UNKNOWN",
-                api_status="success",
-                http_status=r.status_code,
-                response_text=r.text[:200],
-                vehicle_type="motorcycle" if is_bike else "car",
-                is_bike=is_bike,
-                ocr_method="easyocr"
-            )
-            return True
-        else:
-            api_storage.add_record(
-                plate_number=plate or "UNKNOWN",
-                api_status="failed",
-                http_status=r.status_code,
-                response_text=r.text[:200],
-                vehicle_type="motorcycle" if is_bike else "car",
-                is_bike=is_bike,
-                ocr_method="easyocr"
-            )
-            return False
-
-    except Exception as e:
-        print(f"API push error: {e}")
-        api_storage.add_record(
-            plate_number=plate or "UNKNOWN",
-            api_status="error",
-            http_status=None,
-            response_text=str(e)[:200],
-            vehicle_type="motorcycle" if is_bike else "car",
-            is_bike=is_bike,
-            ocr_method="easyocr"
-        )
-        return False
+# -------------------- combined image -----------------
+BANNER_BGR = (245, 245, 245)
+TEXT_COLOR = (30, 30, 30)
+DIVIDER = (220, 220, 220)
+SHADOW = (210, 210, 210)
+PLATE_TEXT_COLOR = (0, 100, 200)
 
 
-# -------------------- Combined image functions --------------------
-BANNER_BGR = (43, 22, 10)
+def _add_shadow(canvas: np.ndarray, shadow_size=10):
+    h, w = canvas.shape[:2]
+    out = np.full((h+shadow_size*2, w+shadow_size*2, 3),
+                  (255, 255, 255), np.uint8)
+    out[shadow_size:shadow_size+h, shadow_size:shadow_size+w] = canvas
+    cv2.rectangle(out, (shadow_size-1, shadow_size-1),
+                  (shadow_size+w, shadow_size+h), SHADOW, 2)
+    return out
 
 
-def make_combined_image_from_car(car_image: np.ndarray, plate_text: Optional[str], is_bike: bool = False) -> Optional[Tuple[np.ndarray, str]]:
-    if car_image is None or car_image.size == 0:
+def make_combined_image(frame, bbox, plate_text: Optional[str], plate_crop: Optional[np.ndarray] = None):
+    x1, y1, x2, y2 = [int(v) for v in bbox]
+    car = frame[max(0, y1):max(0, y2), max(0, x1):max(0, x2)].copy()
+    if car is None or car.size == 0:
         return None, None
 
-    display_image = car_image.copy()
-    h = display_image.shape[0]
-    banner_w = int(max(260, 0.65 * h))
-    banner = np.full((h, banner_w, 3), BANNER_BGR, dtype=np.uint8)
+    car_h, car_w = car.shape[:2]
+    plate_section_w = int(max(320, 0.55 * car_w))
+    total_w = car_w + plate_section_w
+    text_section_h = 80
+    total_h = car_h + text_section_h
 
-    txt = (plate_text or "").strip() or "UNKNOWN"
-    full_text = f"{txt}"
+    canvas = np.full((total_h, total_w, 3), BANNER_BGR, np.uint8)
+    inset = 12
 
-    font = cv2.FONT_HERSHEY_SIMPLEX
+    car_target_h = total_h - text_section_h - inset*2
+    scale = car_target_h / car_h
+    car_new_w = int(car_w * scale)
+    car_new_h = int(car_h * scale)
+    car_resized = cv2.resize(car, (car_new_w, car_new_h),
+                             interpolation=cv2.INTER_AREA)
+    canvas[inset:inset+car_new_h, inset:inset+car_new_w] = car_resized
 
-    margin = int(0.12 * h)
-    max_w = banner_w - 2 * margin
-    max_h = h - 2 * margin
+    x_div = car_new_w + inset*2
+    cv2.line(canvas, (x_div, 0), (x_div, total_h - text_section_h), DIVIDER, 2)
 
-    lo, hi = 0.5, 9.0
-    best_scale = lo
-    while hi - lo > 0.02:
-        mid = (lo + hi) / 2.0
-        (tw, th), _ = cv2.getTextSize(full_text, font, mid, 8)
-        if tw <= max_w and th <= max_h:
-            best_scale = mid
-            lo = mid
-        else:
-            hi = mid
+    if plate_crop is not None and plate_crop.size > 0:
+        ph, pw = plate_crop.shape[:2]
+        target_h = int(0.85 * (total_h - text_section_h))
+        target_w = plate_section_w - inset*3
+        s = min(target_h / ph, target_w / pw, 4.5)
+        new_w, new_h = max(1, int(pw * s)), max(1, int(ph * s))
+        plate_resized = cv2.resize(
+            plate_crop, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+        px = x_div + (plate_section_w - new_w)//2
+        py = ((total_h - text_section_h) - new_h)//2
+        px = max(px, x_div + inset)
+        py = max(py, inset)
+        canvas[py:py+new_h, px:px+new_w] = plate_resized
 
-    (tw, th), _ = cv2.getTextSize(full_text, font, best_scale, 8)
-    tx = (banner_w - tw) // 2
-    ty = (h + th) // 2 - int(0.05 * h)
+    display_text = plate_text or "NO PLATE DETECTED"
+    text_y = total_h - 25
+    font_scale = 1.2
+    thickness = 3
 
-    cv2.putText(banner, full_text, (tx, ty), font,
-                best_scale, (0, 0, 0), 18, cv2.LINE_AA)
-    cv2.putText(banner, full_text, (tx, ty), font, best_scale,
-                (25, 25, 25), 12, cv2.LINE_AA)
-    cv2.putText(banner, full_text, (tx, ty), font, best_scale,
-                (230, 210, 60), 6, cv2.LINE_AA)
-    cv2.putText(banner, full_text, (tx, ty), font, best_scale,
-                (255, 240, 120), 2, cv2.LINE_AA)
+    text_size = cv2.getTextSize(
+        display_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0]
+    text_x = (total_w - text_size[0]) // 2
 
-    combined = np.hstack([display_image, banner])
+    bg_padding = 10
+    cv2.rectangle(canvas,
+                  (text_x - bg_padding, text_y - text_size[1] - bg_padding),
+                  (text_x + text_size[0] + bg_padding, text_y + bg_padding),
+                  (255, 255, 255), -1)
 
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_txt = re.sub(r"[^A-Za-z0-9]+", "", txt)
-    out_path = os.path.join(
-        ACCEPTED_DIR, f"combined_{ts}_{'BIKE' if is_bike else 'CAR'}_{safe_txt or 'UNKNOWN'}.jpg")
-    cv2.imwrite(out_path, combined, [cv2.IMWRITE_JPEG_QUALITY, 95])
+    border_color = PLATE_TEXT_COLOR if plate_text else (100, 100, 100)
+    cv2.rectangle(canvas,
+                  (text_x - bg_padding, text_y - text_size[1] - bg_padding),
+                  (text_x + text_size[0] + bg_padding, text_y + bg_padding),
+                  border_color, 2)
 
-    return combined, out_path
+    text_color = PLATE_TEXT_COLOR if plate_text else (100, 100, 100)
+    cv2.putText(canvas, display_text, (text_x, text_y),
+                cv2.FONT_HERSHEY_SIMPLEX, font_scale, text_color, thickness, cv2.LINE_AA)
+
+    cv2.putText(canvas, "Vehicle", (inset, 28),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.9, TEXT_COLOR, 2, cv2.LINE_AA)
+    cv2.putText(canvas, "License Plate", (x_div + inset, 28),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.9, TEXT_COLOR, 2, cv2.LINE_AA)
+
+    pretty = _add_shadow(canvas, shadow_size=10)
+    outp = os.path.join(OUTPUT_DIR, _fname("combined", plate_text))
+    cv2.imwrite(outp, pretty, [cv2.IMWRITE_JPEG_QUALITY, 95])
+    return pretty, outp
 
 
-def push_combined_from_car_image(car_image: np.ndarray, plate_text: Optional[str], is_bike: bool = False):
-    if not plate_text or plate_text == "UNREADABLE":
-        print("Skipping API push: No valid plate text")
-        return None
-
-    is_valid, reason = validate_india_plate(plate_text, is_bike)
-
-    if not is_valid:
-        print(
-            f"Skipping API push: Invalid India plate: {plate_text} - {reason}")
-
-        api_storage.add_record(
-            plate_number=plate_text,
-            api_status="rejected_invalid",
-            http_status=None,
-            response_text=reason,
-            image_path=None,
-            vehicle_type="motorcycle" if is_bike else "car",
-            validation_result=reason,
-            is_bike=is_bike,
-            ocr_method="easyocr"
-        )
-        stats.rejected_plates += 1
-        return None
-
-    combined, out_path = make_combined_image_from_car(
-        car_image, plate_text, is_bike)
+def push_combined_from_frame(frame, bbox, plate_text: Optional[str], plate_crop: Optional[np.ndarray] = None):
+    combined, outp = make_combined_image(frame, bbox, plate_text, plate_crop)
     if combined is None:
         return None
+    return outp
 
-    ok, buf = cv2.imencode(".jpg", combined, [cv2.IMWRITE_JPEG_QUALITY, 95])
-    if not ok:
-        return out_path
-
-    img64 = base64.b64encode(buf.tobytes()).decode("utf-8")
-    success = push_api_base64(img64, plate_text, is_bike)
-
-    if success:
-        print(
-            f"API push successful for plate: {plate_text} ({'BIKE' if is_bike else 'CAR'})")
-    else:
-        print(
-            f"API push failed for plate: {plate_text} ({'BIKE' if is_bike else 'CAR'})")
-
-    return out_path
-
-
-def log_failed_attempt(plate_text: str, reason: str, is_bike: bool = False):
-    try:
-        api_storage.add_record(
-            plate_number=plate_text or "NO_PLATE",
-            api_status=f"rejected_{reason}",
-            http_status=None,
-            response_text=reason,
-            image_path=None,
-            vehicle_type="motorcycle" if is_bike else "car",
-            is_bike=is_bike,
-            ocr_method="easyocr"
-        )
-
-        print(
-            f"Logged failed attempt: {reason} - {plate_text} ({'BIKE' if is_bike else 'CAR'})")
-    except Exception as e:
-        print(f"Error logging failed attempt: {e}")
-
-
-# -------------------- OCR queue --------------------
-ocr_queue = queue.Queue()
-ocr_results = {}
-ocr_lock = threading.Lock()
-ocr_thread = None
-stop_ocr_thread = False
-
-
-def ocr_worker():
-    global stop_ocr_thread
-    while not stop_ocr_thread:
-        try:
-            job = ocr_queue.get(timeout=1.0)
-            if job is None:
-                continue
-
-            tid, car_image, bbox, is_bike = job
-            print(
-                f"OCR worker: track {tid} | car={car_image.shape} | bike={is_bike}")
-
-            # Use EasyOCR instead of Gemini
-            plate_text = read_plate_easyocr(car_image, is_bike)
-
-            with ocr_lock:
-                ocr_results[tid] = {
-                    "text": plate_text,
-                    "timestamp": time.time(),
-                    "bbox": bbox,
-                    "car_image": car_image.copy(),
-                    "is_bike": is_bike,
-                    "ocr_method": "easyocr"
-                }
-
-            print(
-                f"OCR result track {tid}: {plate_text} ({'BIKE' if is_bike else 'CAR'})")
-            ocr_queue.task_done()
-
-        except queue.Empty:
-            continue
-        except Exception as e:
-            print(f"OCR worker error: {e}")
-            continue
-
-
-def start_ocr_worker():
-    global ocr_thread, stop_ocr_thread
-    stop_ocr_thread = False
-    ocr_thread = threading.Thread(target=ocr_worker, daemon=True)
-    ocr_thread.start()
-    print("OCR worker thread started (EasyOCR)")
-
-
-def stop_ocr_worker():
-    global stop_ocr_thread
-    stop_ocr_thread = True
-    if ocr_thread and ocr_thread.is_alive():
-        ocr_thread.join(timeout=2.0)
-    print("OCR worker thread stopped")
-
-# -------------------- Track memory --------------------
+# -------------------- tracking memory ----------------
 
 
 @dataclass
-class CarCandidate:
-    image: np.ndarray
+class ReadItem:
+    text: str
     conf: float
-    sharp: float
     ts: float
 
 
@@ -748,129 +375,83 @@ class CarCandidate:
 class TrackMem:
     last_seen: float
     bbox: Tuple[int, int, int, int]
-    posted: bool
-    in_zone: bool
-    ocr_attempts: int
-    last_ocr_time: float
+    reads: List[ReadItem]
     final_plate: Optional[str]
-    candidates: List[CarCandidate]
-    ocr_done: bool
-    best_candidate_image: Optional[np.ndarray] = None
-    is_bike: bool = False
+    posted: bool
+    next_ocr_frame: int
+    last_plate_conf: float = 0.0
+    last_plate_crop: Optional[np.ndarray] = None
 
 
 tracks: Dict[int, TrackMem] = {}
 
 
-def pick_best_candidate(cands: List[CarCandidate]) -> Optional[CarCandidate]:
-    if not cands:
-        return None
+def add_read(tid: int, text: Optional[str], conf: float):
+    if not text:
+        return
 
-    non_blurry = []
-    for c in cands:
-        if not is_image_blurry(c.image, threshold=100.0):
-            non_blurry.append(c)
+    text = _clean_alnum(text)
+    if len(text) < 6 or len(text) > 12:
+        return
 
-    if not non_blurry:
-        non_blurry = cands
+    # Only accept as "final" if valid India plate
+    norm = normalize_to_best_india_plate(text)
+    if not norm:
+        return
 
-    best = None
-    best_score = -1e9
-    for c in non_blurry:
-        score = (c.conf * 150.0) + (c.sharp / 10.0) + \
-            (time.time() - c.ts) * -0.1
-        if score > best_score:
-            best_score = score
-            best = c
+    T = tracks[tid]
+    T.reads.append(ReadItem(norm, float(conf), time.time()))
 
-    return best
+    # Weighted vote: prefer higher OCR confidence + recent + repeated
+    score_map: Dict[str, float] = {}
+    for r in T.reads:
+        recency_boost = 1.0 if (time.time() - r.ts) < 8 else 0.7
+        score_map[r.text] = score_map.get(
+            r.text, 0.0) + (r.conf * recency_boost)
+
+    best_plate = max(score_map.items(), key=lambda kv: kv[1])[0]
+    freq = sum(1 for r in T.reads if r.text == best_plate)
+    best_conf = max(
+        (r.conf for r in T.reads if r.text == best_plate), default=0.0)
+
+    # accept if repeated OR super confident
+    if freq >= 2 or best_conf >= 0.90:
+        T.final_plate = best_plate
+        print(
+            f"🎯 Track {tid} final plate: {T.final_plate} (freq={freq}, best_conf={best_conf:.2f})")
 
 
-# -------------------- main loop --------------------
-print(f"Starting tracker + EasyOCR (India Plates)")
-print("Using EasyOCR for plate detection")
-print("India plate validation enabled")
-print(f"API hits stored in Excel: {api_storage.excel_path}")
-
-start_ocr_worker()
-
+# -------------------- main loop ----------------------
+print(
+    f"🚀 YOLO + PaddleOCR | plate_det_conf ≥ {PLATE_DET_MIN_CONF:.2f} | ocr_conf ≥ {PLATE_OCR_MIN_CONF:.2f}")
 cap = open_stream()
-if not cap.isOpened():
-    print("Cannot open stream")
-    stop_ocr_worker()
+if not cap or not cap.isOpened():
     raise SystemExit(1)
 
-ret, _ = cap.read()
-if not ret:
-    print("Stream read failed")
-    stop_ocr_worker()
-    raise SystemExit(1)
+if SHOW_PREVIEW:
+    try:
+        cv2.namedWindow("Preview", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Preview", 960, 540)
+    except Exception:
+        SHOW_PREVIEW = False
 
 frame_idx = 0
-captures = 0
-retries = 0
 
 try:
     while True:
         ok, frame = cap.read()
         if not ok or frame is None or frame.size == 0:
-            retries += 1
-            if retries >= MAX_RECONNECT_ATTEMPTS:
-                cap = restart(cap)
-                retries = 0
-            time.sleep(0.01)
-            continue
+            if LOOP_VIDEO:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                frame_idx = 0
+                tracks.clear()
+                continue
+            break
 
-        retries = 0
         frame_idx += 1
+        H, W, _ = frame.shape
+        TRIPWIRE_Y = int(H * TRIPWIRE_Y_NORM)
 
-        # ---- OCR results back from worker ----
-        with ocr_lock:
-            done_ids = list(ocr_results.keys())
-            for tid in done_ids:
-                res = ocr_results.pop(tid, None)
-                if not res:
-                    continue
-                if tid not in tracks:
-                    continue
-                T = tracks[tid]
-                if T.posted:
-                    continue
-
-                plate_text = res["text"]
-                car_image = res.get("car_image")
-                is_bike = res.get("is_bike", False)
-
-                if plate_text:
-                    T.final_plate = plate_text
-                    print(
-                        f"Track {tid} final plate: {plate_text} ({'BIKE' if is_bike else 'CAR'})")
-
-                    if T.in_zone and not T.posted:
-                        is_valid, reason = validate_india_plate(
-                            plate_text, is_bike)
-
-                        if is_valid:
-                            if car_image is not None:
-                                push_combined_from_car_image(
-                                    car_image, T.final_plate, is_bike)
-                            elif T.best_candidate_image is not None:
-                                push_combined_from_car_image(
-                                    T.best_candidate_image, T.final_plate, is_bike)
-
-                            captures += 1
-                            T.posted = True
-                            print(
-                                f"Posted track {tid} plate={T.final_plate} ({'BIKE' if is_bike else 'CAR'})")
-                        else:
-                            log_failed_attempt(plate_text, reason, is_bike)
-
-                        T.ocr_done = True
-                        T.ocr_attempts = MAX_OCR_ATTEMPTS_PER_TRACK
-                else:
-                    T.ocr_done = True
-
-        # ---- Detect/track every N frames ----
         if frame_idx % PROCESS_EVERY_N_FRAMES == 0:
             tr = car_model.track(
                 frame,
@@ -878,7 +459,7 @@ try:
                 persist=True,
                 verbose=False,
                 tracker=TRACKER_CFG,
-                classes=[2, 3, 5, 7],
+                classes=[2, 3, 5, 7]  # car, motorcycle, bus, truck
             )
 
             if tr and len(tr):
@@ -887,133 +468,175 @@ try:
                     ids = r.boxes.id.int().cpu().tolist()
                     xyxy = r.boxes.xyxy.int().cpu().tolist()
                     confs = r.boxes.conf.cpu().tolist()
-                    classes_list = r.boxes.cls.int().cpu().tolist()
 
-                    for (tid, (x1, y1, x2, y2), c, class_id) in zip(ids, xyxy, confs, classes_list):
+                    for (tid, (x1, y1, x2, y2), c) in zip(ids, xyxy, confs):
                         ar = (x2 - x1) / max(1, (y2 - y1))
                         area = (x2 - x1) * (y2 - y1)
-
-                        is_bike = (class_id == 3)
-
-                        if is_bike:
-                            stats.vehicles_detected["bike"] += 1
-                            if ar < MIN_BIKE_AR or ar > MAX_BIKE_AR or area < MIN_BIKE_AREA:
-                                continue
-                        else:
-                            vehicle_type = {2: "car", 5: "bus", 7: "truck"}.get(
-                                class_id, "vehicle")
-                            stats.vehicles_detected[vehicle_type] += 1
-                            if ar < MIN_CAR_AR or ar > MAX_CAR_AR or area < MIN_CAR_AREA:
-                                continue
-
-                        cx, cy = int((x1 + x2) / 2), int((y1 + y2) / 2)
-                        in_zone = zone_contains(cx, cy)
+                        if ar < MIN_CAR_AR or ar > MAX_CAR_AR or area < MIN_CAR_AREA:
+                            continue
 
                         now = time.time()
                         if tid not in tracks:
                             tracks[tid] = TrackMem(
-                                last_seen=now,
-                                bbox=(x1, y1, x2, y2),
-                                posted=False,
-                                in_zone=False,
-                                ocr_attempts=0,
-                                last_ocr_time=0.0,
-                                final_plate=None,
-                                candidates=[],
-                                ocr_done=False,
-                                best_candidate_image=None,
-                                is_bike=is_bike
-                            )
+                                now, (x1, y1, x2, y2), [], None, False, frame_idx)
+                            print(f"🆕 New track: {tid}")
 
                         T = tracks[tid]
                         T.last_seen = now
                         T.bbox = (x1, y1, x2, y2)
-                        T.in_zone = in_zone
-                        T.is_bike = is_bike
 
-                        if T.posted:
-                            continue
+                        # ---------- OCR ----------
 
-                        if T.final_plate and T.in_zone:
-                            if T.best_candidate_image is not None:
-                                push_combined_from_car_image(
-                                    T.best_candidate_image, T.final_plate, T.is_bike)
-                            captures += 1
-                            T.posted = True
+                        if frame_idx >= T.next_ocr_frame:
+                            car_roi = frame[y1:y2, x1:x2]
+                            if car_roi is not None and car_roi.size > 0:
+                                pres = plate_model.predict(
+                                    source=car_roi, conf=0.10, verbose=False, imgsz=640)
+
+                                best_plate_crop = None
+                                best_plate_conf = 0.0
+
+                                for pr in pres or []:
+                                    if pr is None or pr.boxes is None:
+                                        continue
+                                    for p in pr.boxes:
+                                        try:
+                                            pc = float(p.conf)
+                                        except Exception:
+                                            try:
+                                                pc = float(p.conf[0])
+                                            except Exception:
+                                                pc = 0.0
+
+                                        if pc > best_plate_conf:
+                                            px1, py1, px2, py2 = map(
+                                                int, p.xyxy[0])
+
+                                            padx = int(0.25 * (px2 - px1))
+                                            pady = int(0.30 * (py2 - py1))
+                                            px1 = max(0, px1 - padx)
+                                            py1 = max(0, py1 - pady)
+                                            px2 = min(
+                                                car_roi.shape[1] - 1, px2 + padx)
+                                            py2 = min(
+                                                car_roi.shape[0] - 1, py2 + pady)
+
+                                            if px2 > px1 and py2 > py1:
+                                                best_plate_crop = car_roi[py1:py2, px1:px2]
+                                                best_plate_conf = pc
+
+                                T.last_plate_conf = best_plate_conf
+                                T.last_plate_crop = best_plate_crop.copy() if (
+                                    best_plate_crop is not None and best_plate_crop.size > 0) else None
+
+                                if best_plate_crop is not None and best_plate_crop.size > 0 and best_plate_conf >= PLATE_DET_MIN_CONF:
+                                    plate_text, ocr_conf = run_paddle_ocr_on_mat(
+                                        best_plate_crop)
+                                    if plate_text:
+                                        add_read(tid, plate_text, ocr_conf)
+
+                                T.next_ocr_frame = frame_idx + 8  # reduce frequency
+
+                        # ---------- tripwire ----------
+                        _, _, _, y2_car = T.bbox
+                        is_crossing = y2_car >= TRIPWIRE_Y
+
+                        if not T.posted and is_crossing:
+                            plate_out = T.final_plate  # only valid India plates land here
                             print(
-                                f"Posted track {tid} plate={T.final_plate} ({'BIKE' if T.is_bike else 'CAR'})")
-                            continue
+                                f"📸 Capturing track {tid} - Plate: {plate_out}")
 
-                        # ---- Collect car images when in zone ----
-                        if in_zone and (not T.posted) and (T.ocr_attempts < MAX_OCR_ATTEMPTS_PER_TRACK):
-                            if time.time() - T.last_ocr_time >= MIN_SECONDS_BETWEEN_OCR:
-                                car_roi = frame[y1:y2, x1:x2]
-                                if car_roi is not None and car_roi.size > 0:
-                                    if should_process_for_ocr(car_roi):
-                                        sharp = sharpness_score(car_roi)
-                                        vehicle_type = "bike" if is_bike else "car"
+                            combined_path = push_combined_from_frame(
+                                frame, (x1, y1, x2, y2), plate_out, T.last_plate_crop)
+                            car_path = save_car(
+                                frame, (x1, y1, x2, y2), plate_out)
+                            plate_path = None
+                            if T.last_plate_crop is not None and T.last_plate_crop.size > 0:
+                                plate_path = save_plate_crop(
+                                    T.last_plate_crop, plate_out)
 
-                                        T.candidates.append(CarCandidate(
-                                            image=car_roi.copy(),
-                                            conf=c,
-                                            sharp=sharp,
-                                            ts=time.time()
-                                        ))
+                            meta = {
+                                "ts_utc": datetime.utcnow().isoformat(),
+                                "frame_idx": frame_idx,
+                                "track_id": int(tid),
+                                "plate_text": plate_out,  # valid india plate or None
+                                "plate_det_conf": float(T.last_plate_conf),
+                                "all_valid_reads": [{"text": r.text, "conf": r.conf, "ts": r.ts} for r in T.reads],
+                                "car_path": car_path,
+                                "plate_path": plate_path,
+                                "combined_path": combined_path,
+                            }
+                            json_path = os.path.join(
+                                OUTPUT_DIR, _fname("meta", plate_out, ext="json"))
+                            with open(json_path, "w", encoding="utf-8") as f:
+                                json.dump(
+                                    meta, f, ensure_ascii=False, indent=2)
 
-                                        T.ocr_attempts += 1
-                                        T.last_ocr_time = time.time()
-                                        print(
-                                            f"{vehicle_type.upper()} image collected for track {tid} | conf={c:.2f} sharp={sharp:.0f}")
-                                    else:
-                                        print(
-                                            f"Skipping low-quality image for track {tid}")
+                            print(
+                                f"✅ Capture saved: {plate_out if plate_out else 'NO VALID PLATE'}")
+                            T.posted = True
 
-                        # ---- When enough candidates collected, do ONE OCR call ----
-                        if in_zone and (not T.posted) and (not T.ocr_done):
-                            if len(T.candidates) >= 2 or T.ocr_attempts >= MAX_OCR_ATTEMPTS_PER_TRACK:
-                                best = pick_best_candidate(T.candidates)
-                                if best is not None:
-                                    T.best_candidate_image = best.image.copy()
+        # ---------------- Preview -------------------
+        if SHOW_PREVIEW:
+            disp = frame.copy()
+            cv2.line(disp, (0, TRIPWIRE_Y), (W, TRIPWIRE_Y),
+                     TRIPWIRE_COLOR, TRIPWIRE_THICKNESS)
+            cv2.putText(disp, TRIPWIRE_NAME, (max(10, W - 250), max(20, TRIPWIRE_Y - 10)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, TRIPWIRE_COLOR, 2)
 
-                                    ocr_queue.put(
-                                        (tid, best.image, (x1, y1, x2, y2), T.is_bike))
-                                    T.ocr_done = True
-                                    vehicle_type = "bike" if T.is_bike else "car"
-                                    print(
-                                        f"Submitted ONE EasyOCR for track {tid} ({vehicle_type})")
+            for tid, T in list(tracks.items()):
+                if time.time() - T.last_seen > 30:
+                    tracks.pop(tid, None)
+                    continue
 
-        # cleanup old tracks
-        now = time.time()
-        dead = [tid for tid, T in tracks.items() if now - T.last_seen > 30]
-        for tid in dead:
-            tracks.pop(tid, None)
+                x1, y1, x2, y2 = T.bbox
+                if T.last_plate_conf >= PLATE_GREEN_CONF:
+                    color = (0, 255, 0)
+                elif T.last_plate_conf >= PLATE_YELLOW_CONF:
+                    color = (0, 215, 255)
+                elif T.final_plate:
+                    color = (0, 165, 255)
+                else:
+                    color = (255, 0, 0)
+
+                cv2.rectangle(disp, (x1, y1), (x2, y2), color, 2)
+
+                tag = f"ID {tid}"
+                if T.final_plate:
+                    tag += f" | {T.final_plate}"
+                tag += f" | det:{T.last_plate_conf:.2f}"
+
+                cv2.putText(disp, tag, (x1, max(0, y1 - 8)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+            hud = [
+                f"Frames: {frame_idx}",
+                f"Active tracks: {len(tracks)}",
+                f"Plate det conf ≥ {PLATE_DET_MIN_CONF:.2f}",
+                f"OCR conf ≥ {PLATE_OCR_MIN_CONF:.2f}",
+                "q: quit | s: save"
+            ]
+            for i, t in enumerate(hud):
+                cv2.putText(disp, t, (10, 30 + i * 22),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+            cv2.imshow("Preview", disp)
+            k = cv2.waitKey(1) & 0xFF
+            if k == ord('q'):
+                break
+            if k == ord('s'):
+                fp = os.path.join(OUTPUT_DIR, f"debug_{frame_idx}.jpg")
+                cv2.imwrite(fp, disp)
+                print("Saved", fp)
 
 except KeyboardInterrupt:
     pass
 finally:
-    stop_ocr_worker()
-    cap.release()
-
-    # Save final Excel
-    api_storage.df.to_excel(api_storage.excel_path, index=False)
-
-    print("\n" + "="*50)
-    print("FINAL STATISTICS:")
-    print("="*50)
-    print(f"Runtime: {time.time() - stats.start_time:.1f} seconds")
-    print(f"Total captures: {captures}")
-    print(f"EasyOCR calls: {stats.easyocr_calls}")
-    print(f"Successful OCR: {stats.successful_ocr}")
-    print(f"Failed OCR: {stats.failed_ocr}")
-    print(f"Validated plates: {stats.validated_plates}")
-    print(f"Rejected plates: {stats.rejected_plates}")
-    print(f"Vehicles detected: {dict(stats.vehicles_detected)}")
-
-    api_stats = api_storage.get_stats()
-    print(
-        f"API Hits in Excel: {api_stats['successful']}/{api_stats['total_hits']} successful")
-    print(f"Bikes detected: {api_stats['bikes']}")
-    print(f"Cars detected: {api_stats['cars']}")
-    print(f"Excel file: {api_storage.excel_path}")
-    print("="*50)
-    print("Done.")
+    if cap:
+        cap.release()
+    if SHOW_PREVIEW:
+        try:
+            cv2.destroyAllWindows()
+        except Exception:
+            pass
+    print("✅ Done.")
