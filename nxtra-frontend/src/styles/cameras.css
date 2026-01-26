@@ -1,8 +1,5 @@
 /* src/styles/cameras.css */
 
-/* page background should already be your app bg.
-   This page uses glass panels similar to Alerts */
-
 .pageShell {
   padding: 22px 22px 40px;
 }
@@ -41,11 +38,6 @@
   border: 1px solid rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-}
-
-.pillOk {
-  background: rgba(20, 40, 25, 0.35);
-  color: #b6ffce;
 }
 
 .pillWarn {
@@ -94,6 +86,29 @@
   font-size: 14px;
 }
 
+.sortRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.select {
+  height: 40px;
+  border-radius: 14px;
+  padding: 0 12px;
+  background: rgba(10, 12, 16, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  outline: none;
+}
+
+.select option {
+  background: #111;
+}
+
 .btnRow {
   display: flex;
   gap: 10px;
@@ -125,12 +140,20 @@
 }
 
 .btnPrimary {
-  background: linear-gradient(135deg, rgba(220, 30, 40, 0.95), rgba(180, 10, 20, 0.95));
+  background: linear-gradient(
+    135deg,
+    rgba(220, 30, 40, 0.95),
+    rgba(180, 10, 20, 0.95)
+  );
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .btnPrimary:hover {
-  background: linear-gradient(135deg, rgba(240, 40, 55, 0.95), rgba(200, 15, 30, 0.95));
+  background: linear-gradient(
+    135deg,
+    rgba(240, 40, 55, 0.95),
+    rgba(200, 15, 30, 0.95)
+  );
 }
 
 .btnGhost {
@@ -187,7 +210,6 @@
 .spin {
   animation: spin 0.9s linear infinite;
 }
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -247,6 +269,7 @@
   gap: 8px;
 }
 
+/* base button */
 .iconBtnSmall {
   width: 34px;
   height: 34px;
@@ -272,9 +295,37 @@
   transform: none;
 }
 
+/* ✅ DARK action buttons (Full/View/Edit) — keep AFTER base */
+.iconBtnSmall.iconDark {
+  background: rgba(0, 0, 0, 0.60) !important;
+  border-color: rgba(255, 255, 255, 0.20) !important;
+  color: #fff !important;
+}
+.iconBtnSmall.iconDark:hover {
+  background: rgba(0, 0, 0, 0.78) !important;
+}
+
+/* ✅ delete */
 .iconBtnSmall.danger {
-  background: rgba(220, 30, 40, 0.35);
-  border-color: rgba(220, 30, 40, 0.55);
+  background: rgba(220, 30, 40, 0.55);
+  border-color: rgba(220, 30, 40, 0.65);
+}
+
+/* ✅ per-camera generating badge */
+.camGenPill {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 /* Preview */
@@ -282,14 +333,12 @@
   position: absolute;
   inset: 0;
 }
-
 .camVideo {
   width: 100%;
   height: 100%;
   object-fit: cover;
   background: #000;
 }
-
 .camEmpty {
   width: 100%;
   height: 100%;
@@ -299,16 +348,13 @@
   justify-content: center;
   color: rgba(255, 255, 255, 0.65);
 }
-
 .camEmptyIcon {
   opacity: 0.8;
 }
-
 .camEmptyText {
   margin-top: 8px;
   font-weight: 800;
 }
-
 .camEmptySub {
   margin-top: 4px;
   font-size: 12px;
@@ -330,19 +376,34 @@
   background: rgba(255, 255, 255, 0.10);
   color: #fff;
 }
-
 .badgeLive {
   background: rgba(0, 160, 70, 0.35);
   border-color: rgba(0, 160, 70, 0.55);
 }
-
 .badgeLoading {
   background: rgba(240, 170, 40, 0.25);
   border-color: rgba(240, 170, 40, 0.40);
 }
-
 .badgeOff {
   background: rgba(255, 255, 255, 0.10);
+}
+
+/* ✅ Scroll only inside camera grid */
+.camsScroll {
+  max-height: calc(100vh - 340px);
+  overflow: auto;
+  padding-right: 6px;
+}
+.camsScroll::-webkit-scrollbar {
+  width: 10px;
+}
+.camsScroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+}
+.camsScroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
 }
 
 /* Overlay modal */
@@ -354,7 +415,6 @@
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
-
 .modalTopBar {
   position: absolute;
   left: 0;
@@ -368,18 +428,15 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(0, 0, 0, 0.35);
 }
-
 .modalTitle {
   color: #fff;
   font-weight: 900;
 }
-
 .modalSub {
   color: rgba(255, 255, 255, 0.7);
   font-size: 12px;
   margin-top: 2px;
 }
-
 .modalBody {
   position: absolute;
   inset: 56px 0 0 0;
@@ -388,7 +445,6 @@
   justify-content: center;
   padding: 14px;
 }
-
 .modalPlayer {
   width: min(1100px, 100%);
   height: min(680px, 100%);
@@ -398,14 +454,12 @@
   background: #000;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
 }
-
 .modalVideo {
   width: 100%;
   height: 100%;
   object-fit: contain;
   background: #000;
 }
-
 .modalEmpty {
   width: 100%;
   height: 100%;
@@ -428,7 +482,6 @@
   justify-content: center;
   padding: 16px;
 }
-
 .popup {
   width: min(680px, 100%);
   border-radius: 16px;
@@ -436,12 +489,14 @@
   background: rgba(20, 22, 28, 0.86);
   color: #fff;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+  max-height: calc(100vh - 40px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
-
 .popupSmall {
   width: min(520px, 100%);
 }
-
 .popupHeader {
   padding: 14px 14px;
   display: flex;
@@ -449,16 +504,15 @@
   justify-content: space-between;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
-
 .popupHeaderTitle {
   font-weight: 900;
   letter-spacing: 0.2px;
 }
-
 .popupBody {
   padding: 14px;
+  overflow: auto;
+  max-height: calc(100vh - 160px);
 }
-
 .popupFooter {
   padding: 14px;
   display: flex;
@@ -476,7 +530,6 @@
   color: #fff;
   cursor: pointer;
 }
-
 .iconBtn:hover {
   background: rgba(255, 255, 255, 0.14);
 }
@@ -487,11 +540,9 @@
   gap: 10px 12px;
   font-size: 13px;
 }
-
 .k {
   color: rgba(255, 255, 255, 0.7);
 }
-
 .v {
   color: #fff;
   font-weight: 700;
@@ -505,12 +556,13 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   white-space: pre-wrap;
   word-break: break-all;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
 }
-
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
 }
 
 .formRow {
@@ -519,13 +571,11 @@
   gap: 6px;
   margin-bottom: 12px;
 }
-
 .formRow label {
   font-size: 12px;
   font-weight: 800;
   color: rgba(255, 255, 255, 0.8);
 }
-
 .input {
   border-radius: 12px;
   padding: 10px 12px;
@@ -534,20 +584,16 @@
   color: #fff;
   outline: none;
 }
-
 .input:focus {
   border-color: rgba(255, 255, 255, 0.24);
 }
-
 .input.error {
   border-color: rgba(240, 80, 80, 0.6);
 }
-
 .fieldError {
   color: #ffb0b0;
   font-size: 12px;
 }
-
 .inlineError {
   margin-top: 6px;
   padding: 10px 12px;
@@ -557,7 +603,6 @@
   color: #ffd5d5;
   font-size: 12px;
 }
-
 .warnRow {
   display: flex;
   gap: 12px;
@@ -566,4 +611,119 @@
   border-radius: 12px;
   background: rgba(240, 80, 80, 0.10);
   border: 1px solid rgba(240, 80, 80, 0.18);
+}
+
+/* Pagination */
+.paginationBar {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(10, 12, 16, 0.30);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.paginationBtns {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.pagePill {
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-weight: 800;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+@media (max-width: 720px) {
+  .paginationBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .paginationBtns {
+    justify-content: space-between;
+  }
+}
+
+/* Toast */
+.toastWrap {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99999;
+}
+.toastTop {
+  pointer-events: auto;
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 24px));
+  border-radius: 16px;
+  padding: 14px 14px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(18, 20, 26, 0.92);
+  color: #fff;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: toastIn 0.18s ease-out;
+}
+@keyframes toastIn {
+  from {
+    transform: translateX(-50%) translateY(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) translateY(0px);
+    opacity: 1;
+  }
+}
+.toastIcon {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  opacity: 0.95;
+}
+.toastContent {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+.toastTitle {
+  font-weight: 900;
+}
+.toastMsg {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.35;
+}
+.toastClose {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+}
+.toast.success {
+  border-color: rgba(0, 160, 70, 0.35);
+}
+.toast.error {
+  border-color: rgba(220, 30, 40, 0.45);
+}
+.toast.warn {
+  border-color: rgba(240, 170, 40, 0.45);
 }

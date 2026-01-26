@@ -317,3 +317,66 @@
   font-size: 13px;
 }
 
+/* ---------------- Dropdown theme fix (NO white) ---------------- */
+
+/* Tell browser this area is dark themed (helps date/select popups in many browsers) */
+.tPanel {
+  color-scheme: dark;
+}
+
+/* Style select (closed state) */
+.tInputIcon select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 800;
+
+  /* prevent weird white highlight */
+  caret-color: rgba(255, 255, 255, 0.9);
+}
+
+/* Style the opened dropdown menu background (options) */
+.tInputIcon select option {
+  background: rgba(12, 12, 14, 0.98); /* dark */
+  color: rgba(255, 255, 255, 0.92);  /* white text */
+}
+
+/* Hover / selected look */
+.tInputIcon select option:checked {
+  background: rgba(227, 27, 35, 0.85); /* Nxtra red selection */
+  color: #fff;
+}
+
+/* Optional: for Windows/Chrome focus highlight */
+.tInputIcon select:focus {
+  outline: none;
+}
+
+/* If you want a custom arrow (so it still looks nice) */
+.tInputIcon select {
+  padding-right: 26px;
+}
+
+/* add arrow using the wrapper */
+.tInputIcon {
+  position: relative;
+}
+.tInputIcon::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid rgba(255, 255, 255, 0.55);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.55);
+  transform: translateY(-65%) rotate(45deg);
+  pointer-events: none;
+}

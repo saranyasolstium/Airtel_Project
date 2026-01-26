@@ -13,6 +13,9 @@ import {
   AlertCircle,
   Maximize2,
   Video,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
 } from "lucide-react";
 
 import { CamerasAPI } from "../api/cameras";
@@ -23,6 +26,27 @@ const extractBulkMap = (payload) => {
   const map = {};
   if (!payload) return map;
 
+  // common shapes:
+  // 1) { map: {rtsp: hls, ...} }
+  if (payload.map && typeof payload.map === "object") {
+    Object.entries(payload.map).forEach(([k, v]) => {
+      if (k && v) map[k] = v;
+    });
+    return map;
+  }
+
+  // 2) { items: [{rtsp_url, hls_url}, ...] } or { results: [] } or { data: [] }
+  const arr = payload.items || payload.results || payload.data;
+  if (Array.isArray(arr)) {
+    arr.forEach((x) => {
+      const k = x?.rtsp_url || x?.input || x?.url;
+      const v = x?.hls_url || x?.hls || x?.output;
+      if (k && v) map[k] = v;
+    });
+    return map;
+  }
+
+  // 3) [ {rtsp_url, hls_url}, ... ]
   if (Array.isArray(payload)) {
     payload.forEach((x) => {
       const k = x?.rtsp_url || x?.input || x?.url;
@@ -32,22 +56,40 @@ const extractBulkMap = (payload) => {
     return map;
   }
 
-  if (payload.map && typeof payload.map === "object") {
-    Object.entries(payload.map).forEach(([k, v]) => {
-      if (k && v) map[k] = v;
-    });
-    return map;
-  }
-
-  const arr = payload.items || payload.results || payload.data;
-  if (Array.isArray(arr)) {
-    arr.forEach((x) => {
-      const k = x?.rtsp_url || x?.input || x?.url;
-      const v = x?.hls_url || x?.hls || x?.output;
-      if (k && v) map[k] = v;
-    });
-  }
   return map;
+};
+
+/* ------------------------- Toast ------------------------- */
+const Toast = ({ toast, onClose }) => {
+  if (!toast) return null;
+
+  const Icon =
+    toast.type === "success"
+      ? CheckCircle2
+      : toast.type === "error"
+        ? XCircle
+        : AlertTriangle;
+
+  return (
+    <div className="toastWrap">
+      <div className={`toastTop toast ${toast.type}`}>
+        <div className="toastIcon">
+          <Icon size={18} />
+        </div>
+
+        <div className="toastContent">
+          <div className="toastTitle">{toast.title}</div>
+          {toast.message ? (
+            <div className="toastMsg">{toast.message}</div>
+          ) : null}
+        </div>
+
+        <button className="toastClose" onClick={onClose} title="Close">
+          <X size={18} />
+        </button>
+      </div>
+    </div>
+  );
 };
 
 /* ------------------------- HLS Preview ------------------------- */
@@ -76,7 +118,7 @@ const HlsPreview = ({ hlsUrl, isLive, onLiveChange }) => {
       return;
     }
 
-    // Native HLS
+    // Native HLS (Safari)
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = hlsUrl;
       video
@@ -117,7 +159,7 @@ const HlsPreview = ({ hlsUrl, isLive, onLiveChange }) => {
             hls.recoverMediaError();
           else hls.destroy();
         } catch (e) {
-          console.warn("HLS fatal recovery failed:", e);
+          console.warn("HLS recovery failed:", e);
         }
       });
 
@@ -195,6 +237,7 @@ const FullViewModal = ({ camera, onClose }) => {
   }, [onClose]);
 
   useEffect(() => {
+    // cleanup
     if (hlsRef.current) {
       try {
         hlsRef.current.destroy();
@@ -392,20 +435,17 @@ const CameraFormModal = ({ camera, onClose, onSave, mode = "create" }) => {
     rtsp_url: camera?.rtsp_url || "",
   });
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
 
   const validateForm = () => {
     const newErrors = {};
-
     if (!formData.camera_id.trim())
       newErrors.camera_id = "Camera ID is required";
     if (!formData.name.trim()) newErrors.name = "Camera name is required";
 
-    // ✅ RTSP mandatory
-    if (!formData.rtsp_url.trim()) {
-      newErrors.rtsp_url = "RTSP URL is required";
-    } else if (!formData.rtsp_url.startsWith("rtsp://")) {
+    if (!formData.rtsp_url.trim()) newErrors.rtsp_url = "RTSP URL is required";
+    else if (!formData.rtsp_url.startsWith("rtsp://"))
       newErrors.rtsp_url = "RTSP URL should start with rtsp://";
-    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -416,9 +456,12 @@ const CameraFormModal = ({ camera, onClose, onSave, mode = "create" }) => {
     if (!validateForm()) return;
 
     try {
+      setSaving(true);
       await onSave(formData);
     } catch (error) {
       setErrors({ submit: error?.message || "Failed to save camera" });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -429,7 +472,7 @@ const CameraFormModal = ({ camera, onClose, onSave, mode = "create" }) => {
           <div className="popupHeaderTitle">
             {mode === "create" ? "Add New Camera" : "Edit Camera"}
           </div>
-          <button className="iconBtn" onClick={onClose}>
+          <button className="iconBtn" onClick={onClose} disabled={saving}>
             <X size={18} />
           </button>
         </div>
@@ -442,7 +485,7 @@ const CameraFormModal = ({ camera, onClose, onSave, mode = "create" }) => {
               onChange={(e) =>
                 setFormData({ ...formData, camera_id: e.target.value })
               }
-              disabled={mode === "edit"}
+              disabled={mode === "edit" || saving}
               placeholder="e.g., CAM-001"
               className={errors.camera_id ? "input error" : "input"}
             />
@@ -459,6 +502,7 @@ const CameraFormModal = ({ camera, onClose, onSave, mode = "create" }) => {
                 setFormData({ ...formData, name: e.target.value })
               }
               placeholder="e.g., Main Entrance"
+              disabled={saving}
               className={errors.name ? "input error" : "input"}
             />
             {errors.name && <div className="fieldError">{errors.name}</div>}
@@ -472,24 +516,34 @@ const CameraFormModal = ({ camera, onClose, onSave, mode = "create" }) => {
                 setFormData({ ...formData, rtsp_url: e.target.value })
               }
               placeholder="rtsp://username:password@ip:port/path"
+              disabled={saving}
               className={errors.rtsp_url ? "input error" : "input"}
             />
             {errors.rtsp_url && (
               <div className="fieldError">{errors.rtsp_url}</div>
             )}
             <div className="muted" style={{ marginTop: 6 }}>
-              Optional: Provide RTSP to auto-generate HLS preview
+              Provide RTSP to auto-generate HLS preview
             </div>
           </div>
 
           {errors.submit && <div className="inlineError">{errors.submit}</div>}
 
           <div className="popupFooter">
-            <button type="button" className="btn btnGhost" onClick={onClose}>
+            <button
+              type="button"
+              className="btn btnGhost"
+              onClick={onClose}
+              disabled={saving}
+            >
               Cancel
             </button>
-            <button type="submit" className="btn btnPrimary">
-              {mode === "create" ? "Add Camera" : "Save Changes"}
+            <button type="submit" className="btn btnPrimary" disabled={saving}>
+              {saving
+                ? "Saving..."
+                : mode === "create"
+                  ? "Add Camera"
+                  : "Save Changes"}
             </button>
           </div>
         </form>
@@ -499,7 +553,14 @@ const CameraFormModal = ({ camera, onClose, onSave, mode = "create" }) => {
 };
 
 /* ------------------------- Card ------------------------- */
-const CameraCard = ({ camera, onEdit, onDelete, onView, onFullView }) => {
+const CameraCard = ({
+  camera,
+  onEdit,
+  onDelete,
+  onView,
+  onFullView,
+  isGeneratingThis,
+}) => {
   const [isLive, setIsLive] = useState(false);
 
   return (
@@ -515,26 +576,29 @@ const CameraCard = ({ camera, onEdit, onDelete, onView, onFullView }) => {
 
         <div className="camCardActions">
           <button
-            className="iconBtnSmall"
+            className="iconBtnSmall iconDark"
             title="Full View"
             onClick={() => onFullView(camera)}
           >
             <Maximize2 size={16} />
           </button>
+
           <button
-            className="iconBtnSmall"
+            className="iconBtnSmall iconDark"
             title="View"
             onClick={() => onView(camera)}
           >
             <Eye size={16} />
           </button>
+
           <button
-            className="iconBtnSmall"
+            className="iconBtnSmall iconDark"
             title="Edit"
             onClick={() => onEdit(camera)}
           >
             <Edit2 size={16} />
           </button>
+
           <button
             className="iconBtnSmall danger"
             title="Delete"
@@ -543,6 +607,14 @@ const CameraCard = ({ camera, onEdit, onDelete, onView, onFullView }) => {
             <Trash2 size={16} />
           </button>
         </div>
+
+        {/* ✅ per-camera generating badge */}
+        {isGeneratingThis && (
+          <div className="camGenPill">
+            <RefreshCw size={14} className="spin" />
+            Generating…
+          </div>
+        )}
       </div>
 
       <div className="camCardBody">
@@ -572,9 +644,15 @@ const CameraCard = ({ camera, onEdit, onDelete, onView, onFullView }) => {
 export default function CamerasPage() {
   const [cameras, setCameras] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
+  const [bulkGenerating, setBulkGenerating] = useState(false); // optional top pill
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [sortField, setSortField] = useState("updated_at");
+  const [sortOrder, setSortOrder] = useState("desc");
+
+  const PAGE_SIZE = 9;
+  const [page, setPage] = useState(1);
 
   // modals
   const [showForm, setShowForm] = useState(false);
@@ -585,59 +663,68 @@ export default function CamerasPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [fullViewCamera, setFullViewCamera] = useState(null);
 
-  // auto bulk only once after load
-  const bulkRanRef = useRef(false);
+  // per-camera generating state
+  const [genMap, setGenMap] = useState({}); // { [camera_id]: true }
+
+  // toast
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+
+  const showToast = (type, title, message = "", ms = 2800) => {
+    setToast({ type, title, message });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), ms);
+  };
 
   useEffect(() => {
-    fetchCameras();
+    (async () => {
+      const latest = await fetchCameras();
+      await generateMissingHls(latest);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!loading && cameras.length > 0 && !bulkRanRef.current) {
-      bulkRanRef.current = true;
-      generateAllHlsForCameras(cameras).catch((e) =>
-        console.warn("auto bulk gen error:", e),
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, cameras]);
+    setPage(1);
+  }, [searchQuery, sortField, sortOrder]);
 
   const fetchCameras = async () => {
     try {
       setLoading(true);
       const data = await CamerasAPI.list();
       const items = data?.items || data || [];
-      setCameras(Array.isArray(items) ? items : []);
+      const list = Array.isArray(items) ? items : [];
+      setCameras(list);
       setError(null);
-      bulkRanRef.current = false;
+      return list; // ✅ IMPORTANT: return list
     } catch (e) {
       setError(`Failed to fetch cameras: ${e?.message || e}`);
+      return [];
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredCameras = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return cameras;
-    return cameras.filter((c) => {
-      const id = (c.camera_id || "").toLowerCase();
-      const name = (c.name || "").toLowerCase();
-      return id.includes(q) || name.includes(q);
+  // ✅ Generate HLS for cameras missing hls_url (bulk)
+  const generateMissingHls = async (cameraList) => {
+    const missing = (cameraList || []).filter(
+      (c) =>
+        c?.rtsp_url?.startsWith("rtsp://") &&
+        (!c.hls_url || String(c.hls_url).trim() === ""),
+    );
+
+    if (missing.length === 0) return;
+
+    // mark generating
+    setGenMap((m) => {
+      const next = { ...m };
+      missing.forEach((c) => (next[c.camera_id] = true));
+      return next;
     });
-  }, [cameras, searchQuery]);
 
-  /* ------------------------- HLS generation ------------------------- */
-  const generateAllHlsForCameras = async (cameraList) => {
-    const rtspUrls = cameraList
-      .map((c) => c.rtsp_url)
-      .filter((u) => typeof u === "string" && u.startsWith("rtsp://"));
-
-    if (rtspUrls.length === 0) return;
-
-    setGenerating(true);
+    setBulkGenerating(true);
     try {
+      const rtspUrls = missing.map((c) => c.rtsp_url);
       const payload = await CamerasAPI.generateHlsBulk(rtspUrls);
       const map = extractBulkMap(payload);
 
@@ -648,31 +735,63 @@ export default function CamerasPage() {
         }),
       );
     } catch (e) {
-      console.warn("Bulk HLS error:", e);
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const generateOne = async (camera) => {
-    if (!camera?.rtsp_url) return;
-    setGenerating(true);
-    try {
-      const data = await CamerasAPI.generateHls(camera.rtsp_url);
-      const hls = data?.hls_url;
-      if (!hls) throw new Error("HLS URL not returned by API.");
-
-      setCameras((prev) =>
-        prev.map((c) =>
-          c.camera_id === camera.camera_id ? { ...c, hls_url: hls } : c,
-        ),
+      showToast(
+        "error",
+        "HLS Bulk Failed",
+        e?.message || "Failed to generate HLS",
       );
-    } catch (e) {
-      alert(e?.message || "Failed to generate HLS");
     } finally {
-      setGenerating(false);
+      setBulkGenerating(false);
+      setGenMap((m) => {
+        const next = { ...m };
+        missing.forEach((c) => delete next[c.camera_id]);
+        return next;
+      });
     }
   };
+
+  /* ------------------------- Search + Sort + Pagination ------------------------- */
+  const filteredCameras = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    let list = [...cameras];
+
+    if (q) {
+      list = list.filter((c) => {
+        const id = (c.camera_id || "").toLowerCase();
+        const name = (c.name || "").toLowerCase();
+        return id.includes(q) || name.includes(q);
+      });
+    }
+
+    const getTime = (c) => {
+      const v = c?.[sortField];
+      const t = v ? new Date(v).getTime() : 0;
+      return Number.isFinite(t) ? t : 0;
+    };
+
+    list.sort((a, b) => {
+      const av = getTime(a);
+      const bv = getTime(b);
+      return sortOrder === "asc" ? av - bv : bv - av;
+    });
+
+    return list;
+  }, [cameras, searchQuery, sortField, sortOrder]);
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredCameras.length / PAGE_SIZE)),
+    [filteredCameras.length],
+  );
+
+  const pagedCameras = useMemo(() => {
+    const safePage = Math.min(Math.max(page, 1), totalPages);
+    const start = (safePage - 1) * PAGE_SIZE;
+    return filteredCameras.slice(start, start + PAGE_SIZE);
+  }, [filteredCameras, page, totalPages]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   /* ------------------------- CRUD ------------------------- */
   const handleAddCamera = () => {
@@ -694,41 +813,62 @@ export default function CamerasPage() {
     try {
       setDeleteLoading(true);
       await CamerasAPI.remove(deleteCamera.camera_id);
+
       setCameras((prev) =>
         prev.filter((c) => c.camera_id !== deleteCamera.camera_id),
       );
+
+      showToast(
+        "success",
+        "Camera Deleted",
+        `${deleteCamera.name} (${deleteCamera.camera_id}) deleted successfully.`,
+      );
       setDeleteCamera(null);
+
+      // after delete, keep list clean (no need to generate)
     } catch (e) {
-      alert(`Error deleting camera: ${e?.message || e}`);
+      showToast(
+        "error",
+        "Delete Failed",
+        e?.message || "Error deleting camera",
+      );
     } finally {
       setDeleteLoading(false);
     }
   };
 
   const handleSaveCamera = async (cameraData) => {
-    let savedCamera;
+    try {
+      if (formMode === "create") {
+        const saved = await CamerasAPI.create(cameraData);
+        showToast(
+          "success",
+          "Camera Added",
+          `${saved.name} (${saved.camera_id}) added successfully.`,
+        );
+      } else {
+        const saved = await CamerasAPI.update(cameraData.camera_id, cameraData);
+        showToast(
+          "success",
+          "Camera Updated",
+          `${saved.name} (${saved.camera_id}) updated successfully.`,
+        );
+      }
 
-    if (formMode === "create") {
-      savedCamera = await CamerasAPI.create(cameraData);
-      setCameras((prev) => [savedCamera, ...prev]);
-    } else {
-      savedCamera = await CamerasAPI.update(cameraData.camera_id, cameraData);
-      setCameras((prev) =>
-        prev.map((c) =>
-          c.camera_id === savedCamera.camera_id ? savedCamera : c,
-        ),
-      );
-    }
+      setShowForm(false);
 
-    setShowForm(false);
-
-    if (savedCamera?.rtsp_url?.startsWith("rtsp://")) {
-      generateOne(savedCamera).catch(() => {});
+      // ✅ refresh list then bulk generate missing HLS
+      const latest = await fetchCameras();
+      await generateMissingHls(latest);
+    } catch (e) {
+      showToast("error", "Save Failed", e?.message || "Failed to save camera");
     }
   };
 
   return (
     <div className="pageShell">
+      <Toast toast={toast} onClose={() => setToast(null)} />
+
       <div className="pageHeader">
         <div>
           <div className="pageTitle">Cameras Management</div>
@@ -737,7 +877,19 @@ export default function CamerasPage() {
           </div>
         </div>
 
-        <div className="rightPills">{generating}</div>
+        <div className="rightPills">
+          {/* optional: remove if you want ZERO top pill */}
+          {bulkGenerating && (
+            <div className="pill pillWarn">
+              <RefreshCw
+                size={14}
+                className="spin"
+                style={{ marginRight: 8 }}
+              />
+              Generating HLS...
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="glassPanel">
@@ -751,10 +903,33 @@ export default function CamerasPage() {
             />
           </div>
 
+          <div className="sortRow">
+            <select
+              className="select"
+              value={sortField}
+              onChange={(e) => setSortField(e.target.value)}
+            >
+              <option value="updated_at">Sort: Updated</option>
+              <option value="created_at">Sort: Created</option>
+            </select>
+
+            <select
+              className="select"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+            >
+              <option value="desc">Order: Newest First</option>
+              <option value="asc">Order: Oldest First</option>
+            </select>
+          </div>
+
           <div className="btnRow">
             <button
               className="btn btnGhost"
-              onClick={fetchCameras}
+              onClick={async () => {
+                const latest = await fetchCameras();
+                await generateMissingHls(latest);
+              }}
               disabled={loading}
             >
               <RefreshCw size={16} className={loading ? "spin" : ""} />
@@ -794,7 +969,10 @@ export default function CamerasPage() {
             <button
               className="btn btnPrimary"
               style={{ marginTop: 16 }}
-              onClick={fetchCameras}
+              onClick={async () => {
+                const latest = await fetchCameras();
+                await generateMissingHls(latest);
+              }}
             >
               Retry
             </button>
@@ -819,19 +997,72 @@ export default function CamerasPage() {
             </button>
           </div>
         ) : (
-          <div className="grid3">
-            {filteredCameras.map((camera) => (
-              <CameraCard
-                key={camera.id || camera.camera_id}
-                camera={camera}
-                onEdit={handleEditCamera}
-                onDelete={handleDeleteCamera}
-                onView={(cam) => setViewCamera(cam)}
-                onFullView={(cam) => setFullViewCamera(cam)}
-                onGenerate={generateOne}
-              />
-            ))}
-          </div>
+          <>
+            <div className="camsScroll">
+              <div className="grid3">
+                {pagedCameras.map((camera) => (
+                  <CameraCard
+                    key={camera.id || camera.camera_id}
+                    camera={camera}
+                    isGeneratingThis={!!genMap[camera.camera_id]}
+                    onEdit={handleEditCamera}
+                    onDelete={handleDeleteCamera}
+                    onView={(cam) => setViewCamera(cam)}
+                    onFullView={(cam) => setFullViewCamera(cam)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {filteredCameras.length > PAGE_SIZE && (
+              <div className="paginationBar">
+                <div className="muted">
+                  Showing{" "}
+                  <b>
+                    {(page - 1) * PAGE_SIZE + 1}-
+                    {Math.min(page * PAGE_SIZE, filteredCameras.length)}
+                  </b>{" "}
+                  of <b>{filteredCameras.length}</b>
+                </div>
+
+                <div className="paginationBtns">
+                  <button
+                    className="btn btnGhost"
+                    disabled={page <= 1}
+                    onClick={() => setPage(1)}
+                  >
+                    First
+                  </button>
+                  <button
+                    className="btn btnGhost"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Prev
+                  </button>
+
+                  <div className="pagePill">
+                    Page <b>{page}</b> / <b>{totalPages}</b>
+                  </div>
+
+                  <button
+                    className="btn btnGhost"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </button>
+                  <button
+                    className="btn btnGhost"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage(totalPages)}
+                  >
+                    Last
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

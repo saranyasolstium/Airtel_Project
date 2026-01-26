@@ -18,3 +18,20 @@ export async function listTrafficFlowVehicles({
 
   return res.data;
 }
+
+// ✅ ADD THIS (export api)
+export async function exportTrafficFlowCSV({
+  date,
+  dwell_limit_seconds = 7200,
+}) {
+  const params = { dwell_limit_seconds };
+  if (date) params.date = date;
+
+  // important: blob
+  const res = await axios.get(`${API_BASE}/api/traffic-flow/vehicles/export`, {
+    params,
+    responseType: "blob",
+  });
+
+  return res;
+}

@@ -130,3 +130,11 @@ def update_camera(camera_id: str, camera_update: CameraUpdate, db: Session = Dep
         status=status_val,
         health=health_val,
     )
+
+@router.delete("/{camera_id}", status_code=status.HTTP_200_OK)
+def delete_camera(camera_id: str, db: Session = Depends(get_db)):
+    crud = get_camera_crud(db)   # ✅ same pattern as others
+    ok = crud.delete(camera_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    return {"message": "Camera deleted successfully"}

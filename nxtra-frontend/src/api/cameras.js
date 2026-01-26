@@ -1,4 +1,4 @@
-// src/api/cameras.js
+// src/api/cameras.js  (swagger-correct)
 import { apiRequest } from "./client";
 
 export const CamerasAPI = {
@@ -18,14 +18,13 @@ export const CamerasAPI = {
       method: "DELETE",
     }),
 
-  // generate HLS for ONE camera
-  generateHls: (rtsp_url) =>
-    apiRequest("/api/cameras/generate-hls", {
-      method: "POST",
-      body: { rtsp_url },
-    }),
+  // Swagger: GET /api/generate-hls?rtsp_url=...
+  generateHls: (rtsp_url) => {
+    const qs = new URLSearchParams({ rtsp_url }).toString();
+    return apiRequest(`/api/generate-hls?${qs}`);
+  },
 
-  // generate HLS for MANY cameras
+  // Swagger: POST /api/generate-hls-bulk  { rtsp_urls: [...] }
   generateHlsBulk: (rtsp_urls) =>
     apiRequest("/api/generate-hls-bulk", {
       method: "POST",

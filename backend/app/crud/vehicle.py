@@ -5,55 +5,165 @@ from app.models.vehicle import VehicleLog
 from app.utils.vehicle_helpers import compute_dwell, normalize_image_base64
 
 
-def create_vehicle_log(db: Session, data: dict) -> VehicleLog:
-    # map payload "type" -> model field "event_type"
-    if "type" in data and "event_type" not in data:
-        data["event_type"] = data.pop("type")
-
-    # normalize base64/url
-    if data.get("capture_image"):
-        data["capture_image"] = normalize_image_base64(data["capture_image"])
-
-    # status
-    data["status"] = "exited" if data.get("exit_time") else "on_site"
-
-    # ✅ initial create: only compute dwell if exit_time exists
-    if data.get("entry_time") and data.get("exit_time"):
-        dwell_seconds, dwell_str, _ = compute_dwell(
-            data.get("entry_time"), data.get("exit_time"))
-        data["dwell_seconds"] = dwell_seconds
-        data["dwell_time"] = dwell_str
-    else:
-        data["dwell_seconds"] = None
-        data["dwell_time"] = None
-
-    obj = VehicleLog(**data)
-    db.add(obj)
-    db.commit()
-    db.refresh(obj)
-    return obj
-
-
 def _apply_search(q, search: str):
     like = f"%{search}%"
-    return q.filter(or_(
-        VehicleLog.plate_text.ilike(like),
-        VehicleLog.location.ilike(like),
-        VehicleLog.status.ilike(like),
-        VehicleLog.camera_name.ilike(like),
-        VehicleLog.event_type.ilike(like),
-        VehicleLog.object_classification.ilike(like),
-    ))
+    return q.filter(
+        or_(
+            VehicleLog.plate_text.ilike(like),
+            VehicleLog.location.ilike(like),
+            VehicleLog.status.ilike(like),
+            VehicleLog.entry_camera_name.ilike(like),
+            VehicleLog.exit_camera_name.ilike(like),
+            VehicleLog.event_type.ilike(like),
+            VehicleLog.object_classification.ilike(like),
+        )
+    )
 
 
 def _apply_date_range(q, date_from: str | None, date_to: str | None):
-    # entry_time stored like "YYYY-MM-DDTHH:MM:SS"
-    # range will be string compare safe
     if date_from:
         q = q.filter(VehicleLog.entry_time >= f"{date_from}T00:00:00")
     if date_to:
         q = q.filter(VehicleLog.entry_time <= f"{date_to}T23:59:59")
     return q
+
+
+def _clean_time(v: str | None) -> str | None:
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s if s else None
+
+
+def upsert_vehicle_log_by_plate(db: Session, data: dict) -> VehicleLog:
+    """
+    SAME POST for entry & exit:
+
+    ENTRY:
+      - send entry_time, no exit_time
+      - stores capture_image_entry + entry_camera_name
+      - creates new row
+
+    EXIT:
+      - send exit_time (same plate)
+      - updates latest open row (exit_time is NULL or "")
+      - stores capture_image_exit + exit_camera_name
+      - computes dwell & sets status exited
+    """
+
+    # map payload "type" -> event_type
+    if "type" in data and "event_type" not in data:
+        data["event_type"] = data.pop("type")
+
+    plate = (data.get("plate_text") or "").strip()
+    if not plate:
+        raise ValueError("plate_text is required")
+
+    entry_time = _clean_time(data.get("entry_time"))
+    exit_time = _clean_time(data.get("exit_time"))
+
+    location = data.get("location")
+    entry_camera_name = data.get("entry_camera_name")
+    exit_camera_name = data.get("exit_camera_name")
+
+    event_type = data.get("event_type")
+    object_classification = data.get("object_classification")
+
+    # ✅ images (two fields)
+    entry_img = data.get("capture_image_entry")
+    if entry_img:
+        entry_img = normalize_image_base64(entry_img)
+
+    exit_img = data.get("capture_image_exit")
+    if exit_img:
+        exit_img = normalize_image_base64(exit_img)
+
+    has_exit = exit_time is not None
+
+    # -------------------------
+    # EXIT -> UPDATE OPEN ROW
+    # -------------------------
+    if has_exit:
+        open_row = (
+            db.query(VehicleLog)
+            .filter(VehicleLog.plate_text == plate)
+            .filter(or_(VehicleLog.exit_time.is_(None), VehicleLog.exit_time == ""))
+            .order_by(VehicleLog.id.desc())
+            .first()
+        )
+
+        if open_row:
+            open_row.exit_time = exit_time
+            open_row.status = "exited"
+
+            if location is not None:
+                open_row.location = location
+            if exit_camera_name is not None:
+                open_row.exit_camera_name = exit_camera_name
+            if event_type is not None:
+                open_row.event_type = event_type
+            if object_classification is not None:
+                open_row.object_classification = object_classification
+
+            if exit_img:
+                open_row.capture_image_exit = exit_img
+
+            # ✅ dwell must be computed if entry+exit exist
+            if open_row.entry_time and open_row.exit_time:
+                dwell_seconds, dwell_str, _ = compute_dwell(
+                    open_row.entry_time, open_row.exit_time
+                )
+                open_row.dwell_seconds = dwell_seconds
+                open_row.dwell_time = dwell_str
+
+            db.commit()
+            db.refresh(open_row)
+            return open_row
+
+        # if no open row exists -> create exit-only row
+        obj = VehicleLog(
+            plate_text=plate,
+            entry_time=entry_time,
+            exit_time=exit_time,
+            location=location,
+            status="exited",
+            exit_camera_name=exit_camera_name,
+            event_type=event_type,
+            object_classification=object_classification,
+            capture_image_exit=exit_img,
+        )
+
+        if entry_time and exit_time:
+            dwell_seconds, dwell_str, _ = compute_dwell(entry_time, exit_time)
+            obj.dwell_seconds = dwell_seconds
+            obj.dwell_time = dwell_str
+
+        db.add(obj)
+        db.commit()
+        db.refresh(obj)
+        return obj
+
+    # -------------------------
+    # ENTRY -> CREATE ROW
+    # -------------------------
+    obj = VehicleLog(
+        plate_text=plate,
+        entry_time=entry_time,
+        exit_time=None,
+        location=location,
+        status="on_site",
+        entry_camera_name=entry_camera_name,
+        event_type=event_type,
+        object_classification=object_classification,
+        capture_image_entry=entry_img,
+        dwell_seconds=None,
+        dwell_time=None,
+    )
+
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
 
 
 def list_vehicle_logs(
@@ -62,7 +172,7 @@ def list_vehicle_logs(
     date_from: str | None = None,
     date_to: str | None = None,
     limit: int = 200,
-    offset: int = 0
+    offset: int = 0,
 ):
     q = db.query(VehicleLog)
 
@@ -73,7 +183,7 @@ def list_vehicle_logs(
 
     items = q.order_by(VehicleLog.id.desc()).offset(offset).limit(limit).all()
 
-    # ✅ compute dwell dynamically for on_site rows (exit_time is null)
+    # ✅ dynamic dwell for on-site rows
     for row in items:
         if row.entry_time and not row.exit_time:
             dwell_seconds, dwell_str, _ = compute_dwell(row.entry_time, None)
@@ -86,7 +196,12 @@ def list_vehicle_logs(
     return items
 
 
-def count_vehicle_logs(db: Session, search: str | None = None, date_from: str | None = None, date_to: str | None = None) -> int:
+def count_vehicle_logs(
+    db: Session,
+    search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> int:
     q = db.query(VehicleLog)
     if search:
         q = _apply_search(q, search)
@@ -94,52 +209,6 @@ def count_vehicle_logs(db: Session, search: str | None = None, date_from: str | 
     return q.count()
 
 
-def get_vehicle_log(db: Session, log_id: int):
-    obj = db.query(VehicleLog).filter(VehicleLog.id == log_id).first()
-    if not obj:
-        return None
-
-    # ✅ compute dwell dynamically if needed
-    if obj.entry_time and not obj.exit_time:
-        dwell_seconds, dwell_str, _ = compute_dwell(obj.entry_time, None)
-        obj.dwell_seconds = dwell_seconds
-        obj.dwell_time = dwell_str
-        obj.status = "on_site"
-    elif obj.exit_time:
-        obj.status = "exited"
-
-    return obj
-
-
-def delete_vehicle_log(db: Session, log_id: int) -> bool:
-    obj = db.query(VehicleLog).filter(VehicleLog.id == log_id).first()
-    if not obj:
-        return False
-    db.delete(obj)
-    db.commit()
-    return True
-
-
-def update_vehicle_exit(db: Session, log_id: int, exit_time: str):
-    obj = db.query(VehicleLog).filter(VehicleLog.id == log_id).first()
-    if not obj:
-        return None
-
-    obj.exit_time = exit_time
-
-    dwell_seconds, dwell_str, _ = compute_dwell(obj.entry_time, obj.exit_time)
-    obj.dwell_seconds = dwell_seconds
-    obj.dwell_time = dwell_str
-    obj.status = "exited"
-
-    db.commit()
-    db.refresh(obj)
-    return obj
-
-
-# from __future__ import annotations
-
-# from typing import Optional
 # from sqlalchemy.orm import Session
 # from sqlalchemy import or_
 
@@ -147,156 +216,220 @@ def update_vehicle_exit(db: Session, log_id: int, exit_time: str):
 # from app.utils.vehicle_helpers import compute_dwell, normalize_image_base64
 
 
-# def _map_payload_keys(data: dict) -> dict:
-#     """
-#     Incoming JSON uses "type"
-#     SQLAlchemy model uses "event_type" (DB column is `type`)
-#     """
-#     if not data:
-#         return {}
-
-#     data = dict(data)
-
-#     if "type" in data and "event_type" not in data:
-#         data["event_type"] = data.pop("type")
-
-#     return data
-
-
-# def create_vehicle_log(db: Session, data: dict) -> VehicleLog:
-#     """
-#     POST:
-#     - store base fields
-#     - status auto set
-#     - DO NOT store dwell for on_site (exit_time missing)
-#     """
-#     data = _map_payload_keys(data)
-
-#     # normalize base64 / URL
-#     if data.get("capture_image"):
-#         data["capture_image"] = normalize_image_base64(data["capture_image"])
-
-#     # status auto
-#     if data.get("exit_time"):
-#         data["status"] = "exited"
-#     else:
-#         data["status"] = "on_site"
-
-#     # IMPORTANT: keep dwell NULL in DB when on_site
-#     if not data.get("exit_time"):
-#         data["dwell_seconds"] = None
-#         data["dwell_time"] = None
-#     else:
-#         # if exit_time present, you can store dwell in DB (optional)
-#         ds, dt = compute_dwell(data.get("entry_time"), data.get("exit_time"))
-#         data["dwell_seconds"] = ds
-#         data["dwell_time"] = dt
-
-#     obj = VehicleLog(**data)
-
-#     try:
-#         db.add(obj)
-#         db.commit()
-#         db.refresh(obj)
-#         return obj
-#     except Exception:
-#         db.rollback()
-#         raise
-
-
-# def list_vehicle_logs(
-#     db: Session,
-#     search: Optional[str] = None,
-#     limit: int = 200,
-#     offset: int = 0
-# ):
-#     """
-#     GET:
-#     ✅ ALWAYS compute dwell dynamically
-#     - if exit_time NULL => now - entry_time
-#     - else => exit_time - entry_time
-#     """
-#     q = db.query(VehicleLog)
-
-#     if search:
-#         like = f"%{search}%"
-#         q = q.filter(or_(
+# def _apply_search(q, search: str):
+#     like = f"%{search}%"
+#     return q.filter(
+#         or_(
 #             VehicleLog.plate_text.ilike(like),
 #             VehicleLog.location.ilike(like),
 #             VehicleLog.status.ilike(like),
 #             VehicleLog.camera_name.ilike(like),
 #             VehicleLog.event_type.ilike(like),
 #             VehicleLog.object_classification.ilike(like),
-#         ))
-
-#     logs = q.order_by(VehicleLog.id.desc()).offset(offset).limit(limit).all()
-
-#     # ✅ FIX: compute dwell for response
-#     for log in logs:
-#         if log.entry_time:
-#             ds, dt = compute_dwell(log.entry_time, log.exit_time)
-#             log.dwell_seconds = ds
-#             log.dwell_time = dt
-
-#         # ✅ status auto
-#         if log.exit_time:
-#             log.status = "exited"
-#         else:
-#             log.status = "on_site"
-
-#     return logs
+#         )
+#     )
 
 
-# def get_vehicle_log(db: Session, log_id: int):
-#     obj = db.query(VehicleLog).filter(VehicleLog.id == log_id).first()
-#     if not obj:
+# def _apply_date_range(q, date_from: str | None, date_to: str | None):
+#     # entry_time stored like "YYYY-MM-DDTHH:MM:SS" (string compare safe)
+#     if date_from:
+#         q = q.filter(VehicleLog.entry_time >= f"{date_from}T00:00:00")
+#     if date_to:
+#         q = q.filter(VehicleLog.entry_time <= f"{date_to}T23:59:59")
+#     return q
+
+
+# def _clean_time(v: str | None) -> str | None:
+#     if v is None:
 #         return None
+#     s = str(v).strip()
+#     return s if s else None
 
-#     if obj.entry_time:
-#         ds, dt = compute_dwell(obj.entry_time, obj.exit_time)
-#         obj.dwell_seconds = ds
-#         obj.dwell_time = dt
 
-#     obj.status = "exited" if obj.exit_time else "on_site"
+# # =========================
+# # ENTRY -> CREATE NEW ROW
+# # =========================
+# def create_vehicle_entry(db: Session, data: dict) -> VehicleLog:
+#     """
+#     Creates a new entry row:
+#       - exit_time must be empty/None
+#       - capture_image -> capture_image_entry
+#       - status -> on_site
+#     """
+
+#     # map payload "type" -> model field "event_type"
+#     if "type" in data and "event_type" not in data:
+#         data["event_type"] = data.pop("type")
+
+#     plate = (data.get("plate_text") or "").strip()
+#     if not plate:
+#         raise ValueError("plate_text is required")
+
+#     entry_time = _clean_time(data.get("entry_time"))
+#     if not entry_time:
+#         raise ValueError("entry_time is required for entry")
+
+#     location = data.get("location")
+#     camera_name = data.get("camera_name")
+#     event_type = data.get("event_type")
+#     object_classification = data.get("object_classification")
+
+#     img = data.get("capture_image")
+#     if img:
+#         img = normalize_image_base64(img)
+
+#     obj = VehicleLog(
+#         plate_text=plate,
+#         entry_time=entry_time,
+#         exit_time=None,
+#         location=location,
+#         camera_name=camera_name,
+#         event_type=event_type,
+#         object_classification=object_classification,
+#         status="on_site",
+#         capture_image_entry=img,
+#         dwell_seconds=None,
+#         dwell_time=None,
+#     )
+
+#     db.add(obj)
+#     db.commit()
+#     db.refresh(obj)
 #     return obj
 
 
-# def delete_vehicle_log(db: Session, log_id: int) -> bool:
-#     obj = db.query(VehicleLog).filter(VehicleLog.id == log_id).first()
-#     if not obj:
-#         return False
-
-#     try:
-#         db.delete(obj)
-#         db.commit()
-#         return True
-#     except Exception:
-#         db.rollback()
-#         raise
-
-
-# def update_vehicle_exit(db: Session, log_id: int, exit_time: str):
+# # =========================
+# # EXIT -> UPDATE OPEN ROW
+# # =========================
+# def update_vehicle_exit_by_plate(db: Session, data: dict) -> VehicleLog:
 #     """
-#     PUT exit:
-#     - set exit_time
-#     - compute dwell using exit_time
-#     - set status exited
+#     Updates the latest open row for same plate:
+#       - finds row where plate_text == plate AND (exit_time is NULL or "")
+#       - updates exit_time, status, capture_image_exit
+#       - computes dwell and stores it
 #     """
-#     obj = db.query(VehicleLog).filter(VehicleLog.id == log_id).first()
-#     if not obj:
-#         return None
 
-#     obj.exit_time = exit_time
-#     obj.status = "exited"
+#     # map payload "type" -> model field "event_type"
+#     if "type" in data and "event_type" not in data:
+#         data["event_type"] = data.pop("type")
 
-#     ds, dt = compute_dwell(obj.entry_time, obj.exit_time)
-#     obj.dwell_seconds = ds
-#     obj.dwell_time = dt
+#     plate = (data.get("plate_text") or "").strip()
+#     if not plate:
+#         raise ValueError("plate_text is required")
 
-#     try:
+#     exit_time = _clean_time(data.get("exit_time"))
+#     if not exit_time:
+#         raise ValueError("exit_time is required for exit")
+
+#     location = data.get("location")
+#     camera_name = data.get("camera_name")
+#     event_type = data.get("event_type")
+#     object_classification = data.get("object_classification")
+
+#     img = data.get("capture_image")
+#     if img:
+#         img = normalize_image_base64(img)
+
+#     open_row = (
+#         db.query(VehicleLog)
+#         .filter(VehicleLog.plate_text == plate)
+#         .filter(or_(VehicleLog.exit_time.is_(None), VehicleLog.exit_time == ""))
+#         .order_by(VehicleLog.id.desc())
+#         .first()
+#     )
+
+#     if not open_row:
+#         # If you want STRICT behavior (recommended):
+#         # raise ValueError("No open entry found for this plate to mark exit")
+
+#         # If you want fallback behavior (create exit-only row), uncomment below:
+#         obj = VehicleLog(
+#             plate_text=plate,
+#             entry_time=_clean_time(data.get("entry_time")),  # optional
+#             exit_time=exit_time,
+#             location=location,
+#             camera_name=camera_name,
+#             event_type=event_type,
+#             object_classification=object_classification,
+#             status="exited",
+#             capture_image_exit=img,
+#         )
+
+#         if obj.entry_time and obj.exit_time:
+#             dwell_seconds, dwell_str, _ = compute_dwell(obj.entry_time, obj.exit_time)
+#             obj.dwell_seconds = dwell_seconds
+#             obj.dwell_time = dwell_str
+
+#         db.add(obj)
 #         db.commit()
 #         db.refresh(obj)
 #         return obj
-#     except Exception:
-#         db.rollback()
-#         raise
+
+#     # update open row
+#     open_row.exit_time = exit_time
+#     open_row.status = "exited"
+
+#     if location is not None:
+#         open_row.location = location
+#     if camera_name is not None:
+#         open_row.camera_name = camera_name
+#     if event_type is not None:
+#         open_row.event_type = event_type
+#     if object_classification is not None:
+#         open_row.object_classification = object_classification
+
+#     if img:
+#         open_row.capture_image_exit = img
+
+#     # ✅ compute dwell and store
+#     if open_row.entry_time and open_row.exit_time:
+#         dwell_seconds, dwell_str, _ = compute_dwell(open_row.entry_time, open_row.exit_time)
+#         open_row.dwell_seconds = dwell_seconds
+#         open_row.dwell_time = dwell_str
+
+#     db.commit()
+#     db.refresh(open_row)
+#     return open_row
+
+
+# def list_vehicle_logs(
+#     db: Session,
+#     search: str | None = None,
+#     date_from: str | None = None,
+#     date_to: str | None = None,
+#     limit: int = 200,
+#     offset: int = 0,
+# ):
+#     q = db.query(VehicleLog)
+
+#     if search:
+#         q = _apply_search(q, search)
+
+#     q = _apply_date_range(q, date_from, date_to)
+
+#     items = q.order_by(VehicleLog.id.desc()).offset(offset).limit(limit).all()
+
+#     # recompute dwell dynamically for open rows (optional)
+#     for row in items:
+#         if row.entry_time and not row.exit_time:
+#             dwell_seconds, dwell_str, _ = compute_dwell(row.entry_time, None)
+#             row.dwell_seconds = dwell_seconds
+#             row.dwell_time = dwell_str
+#             row.status = "on_site"
+#         elif row.exit_time:
+#             row.status = "exited"
+
+#     return items
+
+
+# def count_vehicle_logs(
+#     db: Session,
+#     search: str | None = None,
+#     date_from: str | None = None,
+#     date_to: str | None = None,
+# ) -> int:
+#     q = db.query(VehicleLog)
+#     if search:
+#         q = _apply_search(q, search)
+#     q = _apply_date_range(q, date_from, date_to)
+#     return q.count()
