@@ -4,3 +4,4 @@ from .hls_router import router as hls_router
 from .traffic_flow import router as traffic_flow_router
 from .auth import router as auth_router
 from .incidents import router as incidents_router
+from .vehicle_whitelist import router as vehicle_whitelist_router

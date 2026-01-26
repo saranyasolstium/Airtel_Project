@@ -9,6 +9,7 @@ import VehiclesPage from "./pages/VehiclesPage";
 import DashboardLayout from "./components/DashboardLayout";
 import TrafficFlowPage from "./pages/TrafficFlowPage";
 import IncidentsPage from "./pages/IncidentsPage";
+import WhitelistPage from "./pages/WhitelistPage";
 
 export default function App() {
   return (
@@ -63,6 +64,14 @@ export default function App() {
           element={
             <DashboardLayout active="incidents">
               <IncidentsPage />
+            </DashboardLayout>
+          }
+        />
+        <Route
+          path="/dashboard-whitelist"
+          element={
+            <DashboardLayout active="whitelist">
+              <WhitelistPage />
             </DashboardLayout>
           }
         />

@@ -1,0 +1,503 @@
+/* ---------------- Page + Layout ---------------- */
+.wPage{
+  height: 100%;
+  overflow: hidden;         /* ✅ no page scroll */
+  overflow-x: hidden;
+  padding: 22px 22px 40px;
+  color: #fff;
+  display: flex;            /* ✅ lets panel stretch */
+}
+
+
+.wHero{
+  margin-bottom: 14px;
+}
+.wHeroTitle{
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.wHeroSub{
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+}
+
+/* Panel should fit inside viewport */
+.wPanel{
+  min-width: 0;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(10, 14, 22, 0.45);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+  padding: 18px;
+
+  flex: 1;                  /* ✅ fill height */
+  min-height: 0;            /* ✅ IMPORTANT for inner scroll */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+
+
+/* ---------------- Header ---------------- */
+.wPanelHeader{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.wTitle{
+  font-size: 22px;
+  font-weight: 800;
+}
+.wSub{
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.wHeaderRight{
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* ---------------- Buttons ---------------- */
+.wBtn{
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-weight: 800;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.wBtn:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.wBtnGhost:hover{
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.wBtnPrimary{
+  background: linear-gradient(180deg, #ff2a2a, #c40a0a);
+  border: 1px solid rgba(255, 0, 0, 0.25);
+  box-shadow: 0 18px 40px rgba(255, 0, 0, 0.18);
+}
+.wBtnPrimary:hover{ filter: brightness(1.04); }
+
+.wBtnMini{
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.9);
+  padding: 9px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 900;
+  font-size: 12px;
+}
+.wBtnMini:hover{ background: rgba(255,255,255,0.10); }
+.wBtnMini:disabled{ opacity: .55; cursor: not-allowed; }
+
+.wSpin{ animation: wspin 1s linear infinite; }
+@keyframes wspin{ to{ transform: rotate(360deg); } }
+
+/* ---------------- Search ---------------- */
+.wSearchRow{
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wSearch{
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+}
+.wSearch input{
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+}
+.wCount{
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  font-weight: 800;
+}
+
+/* ---------------- Top Error ---------------- */
+.wTopError{
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 86, 86, 0.25);
+  background: rgba(255, 0, 0, 0.10);
+  color: rgba(255,255,255,0.92);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+/* ---------------- Table Wrap (internal scroll) ---------------- */
+.wTableWrap{
+  min-width: 0;         /* ✅ important */
+  margin-top: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.18);
+  flex: 1;
+
+  overflow-y: auto;     /* ✅ vertical inside */
+  overflow-x: auto;     /* ✅ horizontal inside */
+}
+
+.wTable{
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 950px;    /* ✅ creates horizontal scroll inside .wTableWrap */
+}
+
+
+.wTable thead th{
+  text-align: left;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.70);
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+
+  position: sticky; /* ✅ sticky header inside scroll */
+  top: 0;
+  z-index: 2;
+}
+
+.wTable tbody td{
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 13px;
+}
+
+.wEmptyRow{
+  text-align: center;
+  padding: 18px !important;
+  color: rgba(255,255,255,0.75);
+}
+
+.wStrong{ font-weight: 900; }
+.wMuted{ color: rgba(255,255,255,0.70); }
+.wMono{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-weight: 900;
+}
+
+/* Sort header buttons */
+.wThBtn{
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.78);
+  font-weight: 900;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+.wThBtn:hover{ color: rgba(255,255,255,0.92); }
+.wThBtn.center{ justify-content: center; }
+.wSortIdle{ opacity: 0.45; }
+.wSortOn{ opacity: 0.95; }
+
+/* ---------------- Status Pills ---------------- */
+.wPill{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+.wPillOk{
+  background: rgba(0, 255, 170, 0.14);
+  border: 1px solid rgba(0, 255, 170, 0.25);
+  color: rgba(230,255,245,0.95);
+}
+.wPillBad{
+  background: rgba(255, 62, 62, 0.14);
+  border: 1px solid rgba(255, 62, 62, 0.25);
+  color: rgba(255,240,240,0.95);
+}
+
+/* ---------------- Actions ---------------- */
+.wToggleRow{
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+.wToggle{
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  padding: 9px 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 900;
+  font-size: 12px;
+}
+.wToggle .dot{
+  width: 12px;
+  height: 12px;
+  border-radius: 99px;
+  background: rgba(255,255,255,0.45);
+}
+.wToggle.on{
+  border-color: rgba(0,255,170,0.25);
+  background: rgba(0,255,170,0.12);
+}
+.wToggle.on .dot{ background: rgba(0,255,170,0.95); }
+
+.wToggle.off{
+  border-color: rgba(255,62,62,0.25);
+  background: rgba(255,62,62,0.12);
+}
+.wToggle.off .dot{ background: rgba(255,62,62,0.95); }
+
+.wToggle .txt{
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.wIconBtn, .wIconBtnMini{
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.95);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.wIconBtn:hover, .wIconBtnMini:hover{ background: rgba(255,255,255,0.10); }
+
+/* ---------------- Pagination ---------------- */
+.wPager{
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.16);
+}
+
+.wPagerLeft{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.72);
+}
+
+.wPagerSelect{
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  font-weight: 900;
+  outline: none;
+  color-scheme: dark;
+}
+.wPagerSelect option{
+  background: #0b1220;
+  color: #fff;
+}
+
+.wPagerMeta{
+  color: rgba(255,255,255,0.62);
+  font-weight: 800;
+}
+
+.wPagerRight{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wPagerPage{
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.72);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+/* ---------------- Modal ---------------- */
+.wModalOverlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 9999;
+}
+
+.wModal{
+  width: min(920px, 96vw);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(10, 14, 22, 0.72);
+  box-shadow: 0 30px 90px rgba(0,0,0,0.65);
+  backdrop-filter: blur(14px);
+  overflow: hidden;
+}
+
+.wModalHeader{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.wModalTitle{
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.wModalBody{
+  padding: 14px;
+}
+
+.wModalActions{
+  margin-top: 14px;
+  display:flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Form grid used in modal too */
+.wFormGrid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(200px, 1fr));
+  gap: 12px;
+}
+@media (max-width: 1100px){
+  .wFormGrid{ grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 760px){
+  .wFormGrid{ grid-template-columns: 1fr; }
+}
+
+.wField .wLabel{
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 8px;
+}
+
+.wInputIcon{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+}
+
+.wInputIcon input,
+.wInputIcon select{
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+}
+
+.wInputIcon input::placeholder{
+  color: rgba(255,255,255,0.45);
+}
+
+/* Dark select */
+.wSelect{
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-weight: 800;
+}
+.wInputIcon select{
+  color-scheme: dark;
+}
+.wInputIcon select option{
+  background: #0b1220;
+  color: #fff;
+}
+
+/* Error box used in modal too */
+.wError{
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 86, 86, 0.25);
+  background: rgba(255, 0, 0, 0.10);
+  color: rgba(255,255,255,0.92);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.wHint{
+  margin-top: 12px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.62);
+}
+
+

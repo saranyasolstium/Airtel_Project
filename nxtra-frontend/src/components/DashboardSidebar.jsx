@@ -27,7 +27,9 @@ export default function DashboardSidebar({ active }) {
               ? "access"
               : path.includes("dashboard-traffic")
                 ? "traffic"
-                : "");
+                : path.includes("dashboard-whitelist")
+                  ? "whitelist"
+                  : "");
 
   const menu = [
     {
@@ -55,6 +57,13 @@ export default function DashboardSidebar({ active }) {
       label: "Traffic Flow",
       to: "/dashboard-traffic",
       icon: "🛣️",
+    },
+
+    {
+      key: "whitelist",
+      label: "Whitelist",
+      to: "/dashboard-whitelist",
+      icon: "✅",
     },
   ];
 

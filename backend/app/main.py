@@ -5,7 +5,7 @@ import logging
 from app.config import settings
 from app.database import engine, Base
 
-from app.routes import cameras_router, vehicle_logs_router, hls_router, traffic_flow_router, auth_router, incidents_router
+from app.routes import cameras_router, vehicle_logs_router, hls_router, traffic_flow_router, auth_router, incidents_router,vehicle_whitelist_router
 
 
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +34,8 @@ app.include_router(vehicle_logs_router, prefix="/api")
 app.include_router(hls_router, prefix="/api")
 app.include_router(traffic_flow_router, prefix="/api")
 app.include_router(incidents_router, prefix="/api")
+app.include_router(vehicle_whitelist_router, prefix="/api")
+
 
 
 @app.on_event("startup")

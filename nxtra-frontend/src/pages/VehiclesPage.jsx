@@ -38,6 +38,21 @@ const StatusPill = ({ exited }) => (
   </span>
 );
 
+const WhitelistPill = ({ status }) => {
+  const s = (status || "not_found").toLowerCase();
+
+  const label =
+    s === "approved"
+      ? "Approved"
+      : s === "blocked"
+        ? "Blocked"
+        : s === "expired"
+          ? "Expired"
+          : "Not Found";
+
+  return <span className={`wl-pill wl-${s}`}>{label}</span>;
+};
+
 /* ========================= Modal ========================= */
 const ImagePreviewModal = ({ open, onClose, imageUrl, title }) => {
   if (!open) return null;
@@ -237,11 +252,15 @@ export default function VehiclesPage() {
               <tr>
                 <th style={{ width: 210 }}>Capture</th>
                 <th style={{ width: 140 }}>Plate</th>
+                <th style={{ width: 160, textAlign: "center" }}>
+                  Whitelist
+                </th>{" "}
+                {/* ✅ NEW */}
                 <th style={{ width: 240, textAlign: "center" }}>Entry</th>
                 <th style={{ width: 240, textAlign: "center" }}>Exit</th>
                 <th style={{ width: 120, textAlign: "center" }}>Dwell</th>
                 <th>Location</th>
-                <th style={{ width: 140, textAlign: "center" }}>Status</th>
+                <th style={{ width: 140, textAlign: "center" }}>Whitelist</th>
               </tr>
             </thead>
 
@@ -324,7 +343,11 @@ export default function VehiclesPage() {
 
                       {/* Plate */}
                       <td className="vPlate">{row.plate_text || "-"}</td>
+                      {/* White list */}
 
+                      <td style={{ textAlign: "center" }}>
+                        <WhitelistPill status={row.whitelist_status} />
+                      </td>
                       {/* Entry */}
                       <td style={{ textAlign: "center" }}>
                         <div className="vDT">
