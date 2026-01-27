@@ -17,8 +17,12 @@ class VehicleLogCreate(BaseModel):
 
     location: Optional[str] = None
 
+    # ✅ table has these, keep them
     capture_image_entry: Optional[str] = None
     capture_image_exit: Optional[str] = None
+
+    # ✅ compatibility: some clients still send capture_image
+    capture_image: Optional[str] = None
 
     entry_camera_name: Optional[str] = None
     exit_camera_name: Optional[str] = None
@@ -52,8 +56,6 @@ class VehicleLogOut(BaseModel):
     event_type: Optional[str] = Field(default=None, alias="type")
     object_classification: Optional[str] = None
 
-    # ✅ NEW FIELD (runtime in list_vehicle_logs)
-    # approved/blacklisted/expired/not_found
     whitelist_status: Optional[str] = None
 
     class Config:
@@ -71,12 +73,30 @@ class VehicleLogListOut(BaseModel):
 @router.post("/", response_model=VehicleLogOut)
 def push_vehicle_log(payload: VehicleLogCreate, db: Session = Depends(get_db)):
     try:
-        obj = vehicle_crud.upsert_vehicle_log_by_plate(
-            db, payload.model_dump(by_alias=True)
-        )
+        data = payload.model_dump(by_alias=True)
+
+        # ✅ if client sends capture_image, store it as capture_image_entry
+        if (not data.get("capture_image_entry")) and data.get("capture_image"):
+            data["capture_image_entry"] = data.get("capture_image")
+
+        obj = vehicle_crud.upsert_vehicle_log_by_plate(db, data)
+
+        # ✅ prevent ResponseValidationError
+        if obj is None:
+            raise HTTPException(
+                status_code=500, detail="Vehicle log upsert returned None")
+
         return obj
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        # ✅ show real error in response
+        raise HTTPException(status_code=500, detail=f"Server error: {e}")
 
 
 @router.get("/", response_model=VehicleLogListOut)

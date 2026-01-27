@@ -1,4 +1,3 @@
-
 from sqlalchemy import Column, Integer, String, Text, DateTime
 from sqlalchemy.sql import func
 from app.models.base import Base
@@ -21,11 +20,10 @@ class VehicleLog(Base):
 
     status = Column(String(32), nullable=True, default="on_site")
 
-    # ✅ updated columns
+    # ✅ your table fields (no capture_image column)
     capture_image_entry = Column(Text, nullable=True)  # LONGTEXT in MySQL
     capture_image_exit = Column(Text, nullable=True)   # LONGTEXT in MySQL
 
-    # ✅ entry/exit camera columns
     entry_camera_name = Column(String(120), nullable=True)
     exit_camera_name = Column(String(120), nullable=True)
 

@@ -1,4 +1,3 @@
-# app/crud/vehicle.py
 from __future__ import annotations
 
 from datetime import date
@@ -28,7 +27,6 @@ def _apply_search(q, search: str):
 
 
 def _apply_date_range(q, date_from: str | None, date_to: str | None):
-    # entry_time stored as string like "2026-01-26T07:22:00"
     if date_from:
         q = q.filter(VehicleLog.entry_time >= f"{date_from}T00:00:00")
     if date_to:
@@ -44,7 +42,6 @@ def _clean_time(v: str | None) -> str | None:
 
 
 def _parse_entry_date(entry_time: str | None) -> date | None:
-    # entry_time stored like "2026-01-26T07:22:00"
     if not entry_time:
         return None
     s = str(entry_time).strip()
@@ -58,23 +55,15 @@ def _parse_entry_date(entry_time: str | None) -> date | None:
 
 
 def _attach_whitelist_status(db: Session, items: list[VehicleLog]) -> None:
-    """
-    Adds runtime attribute: row.whitelist_status
-    values: approved / blocked / expired / not_found
-    """
-    plates = sorted(
-        {str(x.plate_text or "").strip().upper()
-         for x in items if x.plate_text}
-    )
+    plates = sorted({str(x.plate_text or "").strip().upper()
+                    for x in items if x.plate_text})
 
-    # default for all
     for row in items:
         row.whitelist_status = "not_found"
 
     if not plates:
         return
 
-    # ✅ TRIM+UPPER on DB side to avoid space/case mismatch
     wl_rows = (
         db.query(VehicleWhitelist)
         .filter(func.upper(func.trim(VehicleWhitelist.vehicle_number)).in_(plates))
@@ -113,116 +102,130 @@ def _attach_whitelist_status(db: Session, items: list[VehicleLog]) -> None:
 
 
 def upsert_vehicle_log_by_plate(db: Session, data: dict) -> VehicleLog:
-    # accept payload key "type" and map into python attr event_type
-    if "type" in data and "event_type" not in data:
-        data["event_type"] = data.pop("type")
+    """
+    SAME behaviour, but fixes:
+    ✅ exit should update latest open row for same plate
+    ✅ accepts old key capture_image (stores into capture_image_entry)
+    ✅ rollback on any DB error so it never returns None silently
+    """
+    try:
+        # accept payload key "type" and map into python attr event_type
+        if "type" in data and "event_type" not in data:
+            data["event_type"] = data.pop("type")
 
-    plate = (data.get("plate_text") or "").strip()
-    if not plate:
-        raise ValueError("plate_text is required")
-    plate = plate.upper()
+        # ✅ compatibility: old payload might send capture_image
+        if (not data.get("capture_image_entry")) and data.get("capture_image"):
+            data["capture_image_entry"] = data.get("capture_image")
 
-    entry_time = _clean_time(data.get("entry_time"))
-    exit_time = _clean_time(data.get("exit_time"))
+        plate = (data.get("plate_text") or "").strip()
+        if not plate:
+            raise ValueError("plate_text is required")
+        plate = plate.upper()
 
-    location = data.get("location")
-    entry_camera_name = data.get("entry_camera_name")
-    exit_camera_name = data.get("exit_camera_name")
-    event_type = data.get("event_type")
-    object_classification = data.get("object_classification")
+        entry_time = _clean_time(data.get("entry_time"))
+        exit_time = _clean_time(data.get("exit_time"))
 
-    entry_img = data.get("capture_image_entry")
-    if entry_img:
-        entry_img = normalize_image_base64(entry_img)
+        location = data.get("location")
+        entry_camera_name = data.get("entry_camera_name")
+        exit_camera_name = data.get("exit_camera_name")
+        event_type = data.get("event_type")
+        object_classification = data.get("object_classification")
 
-    exit_img = data.get("capture_image_exit")
-    if exit_img:
-        exit_img = normalize_image_base64(exit_img)
+        entry_img = data.get("capture_image_entry")
+        if entry_img:
+            entry_img = normalize_image_base64(entry_img)
 
-    has_exit = exit_time is not None
+        exit_img = data.get("capture_image_exit")
+        if exit_img:
+            exit_img = normalize_image_base64(exit_img)
 
-    # ---------------------------
-    # EXIT event -> close open row
-    # ---------------------------
-    if has_exit:
-        open_row = (
-            db.query(VehicleLog)
-            .filter(VehicleLog.plate_text == plate)
-            .filter(or_(VehicleLog.exit_time.is_(None), VehicleLog.exit_time == ""))
-            .order_by(VehicleLog.id.desc())
-            .first()
-        )
+        has_exit = exit_time is not None
 
-        if open_row:
-            open_row.exit_time = exit_time
-            open_row.status = "exited"
+        # ---------------------------
+        # EXIT event -> close open row
+        # ---------------------------
+        if has_exit:
+            # ✅ must update the most recent OPEN row (exit_time NULL/empty)
+            open_row = (
+                db.query(VehicleLog)
+                .filter(func.upper(func.trim(VehicleLog.plate_text)) == plate)
+                .filter(or_(VehicleLog.exit_time.is_(None), VehicleLog.exit_time == ""))
+                .order_by(VehicleLog.id.desc())
+                .first()
+            )
 
-            if location is not None:
-                open_row.location = location
-            if exit_camera_name is not None:
-                open_row.exit_camera_name = exit_camera_name
-            if event_type is not None:
-                open_row.event_type = event_type
-            if object_classification is not None:
-                open_row.object_classification = object_classification
-            if exit_img:
-                open_row.capture_image_exit = exit_img
+            if open_row:
+                open_row.exit_time = exit_time
+                open_row.status = "exited"
 
-            # ✅ compute dwell for exited record
-            if open_row.entry_time and open_row.exit_time:
+                if location is not None:
+                    open_row.location = location
+                if exit_camera_name is not None:
+                    open_row.exit_camera_name = exit_camera_name
+                if event_type is not None:
+                    open_row.event_type = event_type
+                if object_classification is not None:
+                    open_row.object_classification = object_classification
+                if exit_img:
+                    open_row.capture_image_exit = exit_img
+
+                if open_row.entry_time and open_row.exit_time:
+                    dwell_seconds, dwell_str, _ = compute_dwell(
+                        open_row.entry_time, open_row.exit_time)
+                    open_row.dwell_seconds = dwell_seconds
+                    open_row.dwell_time = dwell_str
+
+                db.commit()
+                db.refresh(open_row)
+                return open_row
+
+            # If no open row found, create standalone exited row (same as your old behaviour)
+            obj = VehicleLog(
+                plate_text=plate,
+                entry_time=entry_time,
+                exit_time=exit_time,
+                location=location,
+                status="exited",
+                exit_camera_name=exit_camera_name,
+                event_type=event_type,
+                object_classification=object_classification,
+                capture_image_exit=exit_img,
+            )
+            if entry_time and exit_time:
                 dwell_seconds, dwell_str, _ = compute_dwell(
-                    open_row.entry_ops_time if False else open_row.entry_time,  # keep safe
-                    open_row.exit_time,
-                )
-                open_row.dwell_seconds = dwell_seconds
-                open_row.dwell_time = dwell_str
+                    entry_time, exit_time)
+                obj.dwell_seconds = dwell_seconds
+                obj.dwell_time = dwell_str
 
+            db.add(obj)
             db.commit()
-            db.refresh(open_row)
-            return open_row
+            db.refresh(obj)
+            return obj
 
-        # If no open row found, create a standalone exited row
+        # ---------------------------
+        # ENTRY event -> always insert (same as your old behaviour)
+        # ---------------------------
         obj = VehicleLog(
             plate_text=plate,
             entry_time=entry_time,
-            exit_time=exit_time,
+            exit_time=None,
             location=location,
-            status="exited",
-            exit_camera_name=exit_camera_name,
+            status="on_site",
+            entry_camera_name=entry_camera_name,
             event_type=event_type,
             object_classification=object_classification,
-            capture_image_exit=exit_img,
+            capture_image_entry=entry_img,
+            dwell_seconds=None,
+            dwell_time=None,
         )
-        if entry_time and exit_time:
-            dwell_seconds, dwell_str, _ = compute_dwell(entry_time, exit_time)
-            obj.dwell_seconds = dwell_seconds
-            obj.dwell_time = dwell_str
-
         db.add(obj)
         db.commit()
         db.refresh(obj)
         return obj
 
-    # ---------------------------
-    # ENTRY event -> always insert
-    # ---------------------------
-    obj = VehicleLog(
-        plate_text=plate,
-        entry_time=entry_time,
-        exit_time=None,
-        location=location,
-        status="on_site",
-        entry_camera_name=entry_camera_name,
-        event_type=event_type,
-        object_classification=object_classification,
-        capture_image_entry=entry_img,
-        dwell_seconds=None,
-        dwell_time=None,
-    )
-    db.add(obj)
-    db.commit()
-    db.refresh(obj)
-    return obj
+    except Exception:
+        db.rollback()
+        raise
 
 
 def list_vehicle_logs(
@@ -240,17 +243,12 @@ def list_vehicle_logs(
 
     items = q.order_by(VehicleLog.id.desc()).offset(offset).limit(limit).all()
 
-    # ✅ FIX: ALWAYS compute dwell (exit or not)
     for row in items:
-        # normalize status
         if row.exit_time and str(row.exit_time).strip():
             row.status = "exited"
         else:
             row.status = "on_site"
 
-        # compute dwell using correct rule:
-        # - on_site => now - entry
-        # - exited  => exit - entry
         if row.entry_time and str(row.entry_time).strip():
             dwell_seconds, dwell_str, _ = compute_dwell(
                 row.entry_time, row.exit_time)
