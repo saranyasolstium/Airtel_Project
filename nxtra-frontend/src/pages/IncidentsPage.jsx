@@ -105,6 +105,27 @@ export default function IncidentsPage() {
     return () => ac.abort();
   }, []);
 
+  // ✅ Options: ONLY from backend (NO STATIC BASE)
+  const incidentOptions = useMemo(() => {
+    const list = (filterOptions.incident_types || [])
+      .filter(Boolean)
+      .map((x) => String(x).trim())
+      .filter((x) => x.length > 0);
+
+    const uniq = Array.from(new Set(list));
+    return ["all", ...uniq];
+  }, [filterOptions.incident_types]);
+
+  const objectOptions = useMemo(() => {
+    const list = (filterOptions.object_types || [])
+      .filter(Boolean)
+      .map((x) => String(x).trim())
+      .filter((x) => x.length > 0);
+
+    const uniq = Array.from(new Set(list));
+    return ["all", ...uniq];
+  }, [filterOptions.object_types]);
+
   // Reset page on filters change
   useEffect(() => {
     setPage(1);
@@ -121,7 +142,7 @@ export default function IncidentsPage() {
         const data = await listIncidentAlerts(
           {
             status: "active",
-            incident_type: incidentType,
+            incident_type: incidentType !== "all" ? incidentType : undefined,
             camera_name: camera !== "all" ? camera : undefined,
             object_type: objectType !== "all" ? objectType : undefined,
             limit: 500,
@@ -198,29 +219,6 @@ export default function IncidentsPage() {
     setOpen(false);
     setSelected(null);
   }
-
-  // Options
-  const incidentOptions = useMemo(() => {
-    const base = [
-      "crowd",
-      "unauthorized",
-      "door_open",
-      "door_close",
-      "vehicle_unauthorized",
-    ];
-    const extra = (filterOptions.incident_types || []).filter(
-      (t) => t && !base.includes(t),
-    );
-    return ["all", ...base, ...extra];
-  }, [filterOptions.incident_types]);
-
-  const objectOptions = useMemo(() => {
-    const base = ["people", "person", "vehicle", "door", "hand"];
-    const extra = (filterOptions.object_types || []).filter(
-      (o) => o && !base.includes(o),
-    );
-    return ["all", ...base, ...extra];
-  }, [filterOptions.object_types]);
 
   return (
     <div className="iPage">

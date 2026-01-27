@@ -1,50 +1,64 @@
+/* src/styles/whitelist.css */
+
+:root {
+  --nxtra-red: #e31b23;
+  --nxtra-red-dark: #b50f15;
+
+  --glass: rgba(255, 255, 255, 0.06);
+  --glass2: rgba(0, 0, 0, 0.28);
+  --border: rgba(255, 255, 255, 0.12);
+  --muted: rgba(255, 255, 255, 0.7);
+  --muted2: rgba(255, 255, 255, 0.55);
+}
+
 /* ---------------- Page + Layout ---------------- */
-.wPage{
-  height: 100%;
-  overflow: hidden;         /* ✅ no page scroll */
+.wPage {
+  height: calc(100vh - 92px);
+  min-height: 0;
+  overflow: hidden; /* ✅ no page scroll */
   overflow-x: hidden;
   padding: 22px 22px 40px;
   color: #fff;
-  display: flex;            /* ✅ lets panel stretch */
+  display: flex; /* ✅ lets panel stretch */
+  flex-direction: column;
+  gap: 14px;
 }
 
-
-.wHero{
-  margin-bottom: 14px;
+.wHero {
+  margin-bottom: 4px;
 }
-.wHeroTitle{
+.wHeroTitle {
   font-size: 34px;
   font-weight: 800;
   letter-spacing: 0.2px;
   text-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
-.wHeroSub{
+.wHeroSub {
   margin-top: 6px;
   color: rgba(255, 255, 255, 0.72);
   font-size: 13px;
 }
 
 /* Panel should fit inside viewport */
-.wPanel{
+.wPanel {
   min-width: 0;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(10, 14, 22, 0.45);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   padding: 18px;
 
-  flex: 1;                  /* ✅ fill height */
-  min-height: 0;            /* ✅ IMPORTANT for inner scroll */
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-
-
 /* ---------------- Header ---------------- */
-.wPanelHeader{
+.wPanelHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -53,24 +67,25 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.wTitle{
+.wTitle {
   font-size: 22px;
   font-weight: 800;
 }
-.wSub{
+.wSub {
   margin-top: 4px;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.65);
 }
 
-.wHeaderRight{
+.wHeaderRight {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 /* ---------------- Buttons ---------------- */
-.wBtn{
+.wBtn {
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.06);
   color: #fff;
@@ -83,57 +98,72 @@
   gap: 8px;
   cursor: pointer;
 }
-.wBtn:disabled{
+.wBtn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
-.wBtnGhost:hover{
-  background: rgba(255, 255, 255, 0.10);
+.wBtnGhost:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
-.wBtnPrimary{
+.wBtnPrimary {
   background: linear-gradient(180deg, #ff2a2a, #c40a0a);
   border: 1px solid rgba(255, 0, 0, 0.25);
   box-shadow: 0 18px 40px rgba(255, 0, 0, 0.18);
 }
-.wBtnPrimary:hover{ filter: brightness(1.04); }
+.wBtnPrimary:hover {
+  filter: brightness(1.04);
+}
 
-.wBtnMini{
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.9);
+.wBtnMini {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
   padding: 9px 12px;
   border-radius: 12px;
   cursor: pointer;
   font-weight: 900;
   font-size: 12px;
 }
-.wBtnMini:hover{ background: rgba(255,255,255,0.10); }
-.wBtnMini:disabled{ opacity: .55; cursor: not-allowed; }
+.wBtnMini:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.wBtnMini:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 
-.wSpin{ animation: wspin 1s linear infinite; }
-@keyframes wspin{ to{ transform: rotate(360deg); } }
+.wSpin {
+  animation: wspin 1s linear infinite;
+}
+@keyframes wspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* ---------------- Search ---------------- */
-.wSearchRow{
+.wSearchRow {
   margin-top: 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
-.wSearch{
+.wSearch {
   flex: 1;
+  min-width: 280px;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
 }
-.wSearch input{
+.wSearch input {
   width: 100%;
   border: none;
   outline: none;
@@ -141,80 +171,128 @@
   color: #fff;
   font-weight: 700;
 }
-.wCount{
+.wCount {
   font-size: 12px;
-  color: rgba(255,255,255,0.7);
+  color: rgba(255, 255, 255, 0.7);
   font-weight: 800;
 }
 
+/* ---------------- ✅ Date theme (same as incidents) ---------------- */
+.wDate,
+.wDateInput {
+  height: 42px;
+  border-radius: 14px;
+  padding: 0 12px;
+  outline: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-weight: 800;
+  color-scheme: dark;
+}
+
+.wDate {
+  cursor: pointer;
+}
+
+.wDate::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.95;
+  cursor: pointer;
+}
+
+.wDate::-webkit-clear-button,
+.wDate::-webkit-inner-spin-button {
+  filter: invert(1);
+  opacity: 0.9;
+}
+
 /* ---------------- Top Error ---------------- */
-.wTopError{
+.wTopError {
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid rgba(255, 86, 86, 0.25);
-  background: rgba(255, 0, 0, 0.10);
-  color: rgba(255,255,255,0.92);
+  background: rgba(255, 0, 0, 0.1);
+  color: rgba(255, 255, 255, 0.92);
   font-weight: 800;
   font-size: 12px;
 }
 
 /* ---------------- Table Wrap (internal scroll) ---------------- */
-.wTableWrap{
-  min-width: 0;         /* ✅ important */
+.wTableWrap {
+  min-width: 0;
   margin-top: 14px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(0,0,0,0.18);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.18);
   flex: 1;
 
-  overflow-y: auto;     /* ✅ vertical inside */
-  overflow-x: auto;     /* ✅ horizontal inside */
+  overflow-y: auto;
+  overflow-x: auto;
 }
 
-.wTable{
+/* nice scrollbar */
+.wTableWrap::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.wTableWrap::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+}
+.wTableWrap::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.wTable {
   width: 100%;
   border-collapse: collapse;
-  min-width: 950px;    /* ✅ creates horizontal scroll inside .wTableWrap */
+  min-width: 950px;
 }
 
-
-.wTable thead th{
+.wTable thead th {
   text-align: left;
   font-size: 12px;
   font-weight: 900;
-  color: rgba(255,255,255,0.70);
+  color: rgba(255, 255, 255, 0.7);
   padding: 12px 14px;
-  background: rgba(255,255,255,0.04);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 
-  position: sticky; /* ✅ sticky header inside scroll */
+  position: sticky;
   top: 0;
   z-index: 2;
 }
 
-.wTable tbody td{
+.wTable tbody td {
   padding: 12px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 13px;
 }
 
-.wEmptyRow{
+.wEmptyRow {
   text-align: center;
   padding: 18px !important;
-  color: rgba(255,255,255,0.75);
+  color: rgba(255, 255, 255, 0.75);
 }
 
-.wStrong{ font-weight: 900; }
-.wMuted{ color: rgba(255,255,255,0.70); }
-.wMono{
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
+.wStrong {
+  font-weight: 900;
+}
+.wMuted {
+  color: rgba(255, 255, 255, 0.7);
+}
+.wMono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
   font-weight: 900;
 }
 
 /* Sort header buttons */
-.wThBtn{
+.wThBtn {
   width: 100%;
   display: inline-flex;
   align-items: center;
@@ -222,19 +300,27 @@
   gap: 10px;
   background: transparent;
   border: none;
-  color: rgba(255,255,255,0.78);
+  color: rgba(255, 255, 255, 0.78);
   font-weight: 900;
   font-size: 12px;
   cursor: pointer;
   padding: 0;
 }
-.wThBtn:hover{ color: rgba(255,255,255,0.92); }
-.wThBtn.center{ justify-content: center; }
-.wSortIdle{ opacity: 0.45; }
-.wSortOn{ opacity: 0.95; }
+.wThBtn:hover {
+  color: rgba(255, 255, 255, 0.92);
+}
+.wThBtn.center {
+  justify-content: center;
+}
+.wSortIdle {
+  opacity: 0.45;
+}
+.wSortOn {
+  opacity: 0.95;
+}
 
 /* ---------------- Status Pills ---------------- */
-.wPill{
+.wPill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -243,28 +329,33 @@
   font-size: 12px;
   font-weight: 900;
 }
-.wPillOk{
+.wPillOk {
   background: rgba(0, 255, 170, 0.14);
   border: 1px solid rgba(0, 255, 170, 0.25);
-  color: rgba(230,255,245,0.95);
+  color: rgba(230, 255, 245, 0.95);
 }
-.wPillBad{
+.wPillBad {
   background: rgba(255, 62, 62, 0.14);
   border: 1px solid rgba(255, 62, 62, 0.25);
-  color: rgba(255,240,240,0.95);
+  color: rgba(255, 240, 240, 0.95);
+}
+.wPillWarn {
+  background: rgba(255, 193, 7, 0.15);
+  border: 1px solid rgba(255, 193, 7, 0.35);
+  color: rgba(255, 220, 130, 0.95);
 }
 
 /* ---------------- Actions ---------------- */
-.wToggleRow{
+.wToggleRow {
   display: inline-flex;
   gap: 10px;
   align-items: center;
   justify-content: center;
 }
 
-.wToggle{
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.06);
+.wToggle {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
   color: #fff;
   padding: 9px 12px;
   border-radius: 999px;
@@ -275,45 +366,61 @@
   font-weight: 900;
   font-size: 12px;
 }
-.wToggle .dot{
+.wToggle .dot {
   width: 12px;
   height: 12px;
   border-radius: 99px;
-  background: rgba(255,255,255,0.45);
+  background: rgba(255, 255, 255, 0.45);
 }
-.wToggle.on{
-  border-color: rgba(0,255,170,0.25);
-  background: rgba(0,255,170,0.12);
+.wToggle.on {
+  border-color: rgba(0, 255, 170, 0.25);
+  background: rgba(0, 255, 170, 0.12);
 }
-.wToggle.on .dot{ background: rgba(0,255,170,0.95); }
+.wToggle.on .dot {
+  background: rgba(0, 255, 170, 0.95);
+}
 
-.wToggle.off{
-  border-color: rgba(255,62,62,0.25);
-  background: rgba(255,62,62,0.12);
+.wToggle.off {
+  border-color: rgba(255, 62, 62, 0.25);
+  background: rgba(255, 62, 62, 0.12);
 }
-.wToggle.off .dot{ background: rgba(255,62,62,0.95); }
+.wToggle.off .dot {
+  background: rgba(255, 62, 62, 0.95);
+}
 
-.wToggle .txt{
+.wToggle .txt {
   font-weight: 900;
   letter-spacing: 0.2px;
 }
 
-.wIconBtn, .wIconBtnMini{
+.wIconBtn,
+.wIconBtnMini {
   width: 38px;
   height: 38px;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.95);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.95);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
 }
-.wIconBtn:hover, .wIconBtnMini:hover{ background: rgba(255,255,255,0.10); }
+.wIconBtn:hover,
+.wIconBtnMini:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* delete btn */
+.wIconBtnMini.danger {
+  border: 1px solid rgba(255, 80, 80, 0.25);
+}
+.wIconBtnMini.danger:hover {
+  background: rgba(255, 80, 80, 0.15);
+}
 
 /* ---------------- Pagination ---------------- */
-.wPager{
+.wPager {
   margin-top: 12px;
   display: flex;
   align-items: center;
@@ -321,61 +428,63 @@
   gap: 12px;
   padding: 10px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(0,0,0,0.16);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.16);
+  flex-wrap: wrap;
 }
 
-.wPagerLeft{
+.wPagerLeft {
   display: inline-flex;
   align-items: center;
   gap: 10px;
   font-size: 12px;
   font-weight: 900;
-  color: rgba(255,255,255,0.72);
+  color: rgba(255, 255, 255, 0.72);
 }
 
-.wPagerSelect{
+.wPagerSelect {
   padding: 8px 10px;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
   color: #fff;
   font-weight: 900;
   outline: none;
   color-scheme: dark;
 }
-.wPagerSelect option{
+.wPagerSelect option {
   background: #0b1220;
   color: #fff;
 }
 
-.wPagerMeta{
-  color: rgba(255,255,255,0.62);
+.wPagerMeta {
+  color: rgba(255, 255, 255, 0.62);
   font-weight: 800;
 }
 
-.wPagerRight{
+.wPagerRight {
   display: inline-flex;
   align-items: center;
   gap: 10px;
 }
 
-.wPagerPage{
+.wPagerPage {
   padding: 8px 10px;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.04);
-  color: rgba(255,255,255,0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.72);
   font-size: 12px;
   font-weight: 900;
 }
 
 /* ---------------- Modal ---------------- */
-.wModalOverlay{
+.wModalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.55);
+  background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -383,74 +492,79 @@
   z-index: 9999;
 }
 
-.wModal{
+.wModal {
   width: min(920px, 96vw);
   border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(10, 14, 22, 0.72);
-  box-shadow: 0 30px 90px rgba(0,0,0,0.65);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   overflow: hidden;
 }
 
-.wModalHeader{
-  display:flex;
-  align-items:center;
+.wModalHeader {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 14px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.wModalTitle{
+.wModalTitle {
   font-size: 16px;
   font-weight: 900;
   letter-spacing: 0.2px;
 }
 
-.wModalBody{
+.wModalBody {
   padding: 14px;
 }
 
-.wModalActions{
+.wModalActions {
   margin-top: 14px;
-  display:flex;
+  display: flex;
   justify-content: flex-end;
   gap: 10px;
 }
 
 /* Form grid used in modal too */
-.wFormGrid{
+.wFormGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(200px, 1fr));
   gap: 12px;
 }
-@media (max-width: 1100px){
-  .wFormGrid{ grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 1100px) {
+  .wFormGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
-@media (max-width: 760px){
-  .wFormGrid{ grid-template-columns: 1fr; }
+@media (max-width: 760px) {
+  .wFormGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.wField .wLabel{
+.wField .wLabel {
   font-size: 12px;
   font-weight: 800;
-  color: rgba(255,255,255,0.7);
+  color: rgba(255, 255, 255, 0.7);
   margin-bottom: 8px;
 }
 
-.wInputIcon{
+.wInputIcon {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .wInputIcon input,
-.wInputIcon select{
+.wInputIcon select {
   width: 100%;
   border: none;
   outline: none;
@@ -459,12 +573,11 @@
   font-weight: 700;
 }
 
-.wInputIcon input::placeholder{
-  color: rgba(255,255,255,0.45);
+.wInputIcon input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
 }
 
-/* Dark select */
-.wSelect{
+.wSelect {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -475,29 +588,89 @@
   color: #fff;
   font-weight: 800;
 }
-.wInputIcon select{
+.wInputIcon select {
   color-scheme: dark;
 }
-.wInputIcon select option{
+.wInputIcon select option {
   background: #0b1220;
   color: #fff;
 }
 
 /* Error box used in modal too */
-.wError{
+.wError {
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid rgba(255, 86, 86, 0.25);
-  background: rgba(255, 0, 0, 0.10);
-  color: rgba(255,255,255,0.92);
+  background: rgba(255, 0, 0, 0.1);
+  color: rgba(255, 255, 255, 0.92);
   font-weight: 700;
   font-size: 12px;
 }
 
-.wHint{
+.wHint {
   margin-top: 12px;
   font-size: 12px;
-  color: rgba(255,255,255,0.62);
+  color: rgba(255, 255, 255, 0.62);
 }
 
+/* expired row */
+.wRowExpired {
+  opacity: 0.78;
+}
 
+/* disabled small buttons */
+.wBtnMini.disabled,
+.wToggle.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* delete confirm */
+.wConfirmBox {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.wConfirmIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 80, 80, 0.12);
+  border: 1px solid rgba(255, 80, 80, 0.18);
+}
+.wBtnDanger {
+  background: rgba(255, 80, 80, 0.18);
+  border: 1px solid rgba(255, 80, 80, 0.22);
+}
+.wBtnDanger:hover {
+  background: rgba(255, 80, 80, 0.25);
+}
+/* ✅ date input should look like other inputs INSIDE wInputIcon */
+.wInputIcon input[type="date"] {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 800;
+  color-scheme: dark; /* ✅ native picker dark */
+}
+
+/* ✅ make calendar icon white */
+.wInputIcon input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.95;
+  cursor: pointer;
+}
+
+/* optional: fix spacing + align */
+.wInputIcon input[type="date"] {
+  padding: 0;
+  height: 22px;
+}

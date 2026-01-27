@@ -13,6 +13,8 @@ import {
   ChevronUp,
   ChevronDown,
   ArrowUpDown,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 import {
@@ -20,6 +22,7 @@ import {
   createWhitelist,
   setWhitelistStatus,
   updateWhitelist,
+  deleteWhitelist, // ✅ ADD
 } from "../api/vehicleWhitelist";
 
 import "../styles/whitelist.css";
@@ -32,15 +35,14 @@ const today = () => toInputDate(new Date());
 
 const StatusPill = ({ status }) => {
   const s = (status || "").toLowerCase();
-  const approved = s === "approved";
-  return (
-    <span className={`wPill ${approved ? "wPillOk" : "wPillBad"}`}>
-      {approved ? "Approved" : "Blocked"}
-    </span>
-  );
+  const cls =
+    s === "approved" ? "wPillOk" : s === "expired" ? "wPillWarn" : "wPillBad";
+  const label =
+    s === "approved" ? "Approved" : s === "expired" ? "Expired" : "Blocked";
+  return <span className={`wPill ${cls}`}>{label}</span>;
 };
 
-function Modal({ open, title, onClose, children }) {
+function Modal({ open, title, onClose, children, wide = false }) {
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -54,7 +56,10 @@ function Modal({ open, title, onClose, children }) {
 
   return (
     <div className="wModalOverlay" onMouseDown={onClose}>
-      <div className="wModal" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className={`wModal ${wide ? "wModalWide" : ""}`}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="wModalHeader">
           <div className="wModalTitle">{title}</div>
           <button className="wIconBtn" onClick={onClose} type="button">
@@ -72,10 +77,14 @@ export default function WhitelistPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  // modal
+  // add/edit modal
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("add"); // add | edit
   const [editRow, setEditRow] = useState(null);
+
+  // delete modal
+  const [delOpen, setDelOpen] = useState(false);
+  const [delRow, setDelRow] = useState(null);
 
   // form
   const [name, setName] = useState("");
@@ -89,8 +98,8 @@ export default function WhitelistPage() {
   const [search, setSearch] = useState("");
 
   // sorting
-  const [sortKey, setSortKey] = useState("name");
-  const [sortDir, setSortDir] = useState("asc"); // asc | desc
+  const [sortKey, setSortKey] = useState("created_at"); // ✅ default latest first
+  const [sortDir, setSortDir] = useState("desc"); // asc | desc
 
   // pagination
   const [page, setPage] = useState(1);
@@ -126,6 +135,7 @@ export default function WhitelistPage() {
     from_date: (r) => String(r?.from_date || ""),
     to_date: (r) => String(r?.to_date || ""),
     status: (r) => String(r?.status || "").toLowerCase(),
+    created_at: (r) => String(r?.created_at || ""),
   };
 
   const onSort = (key) => {
@@ -134,7 +144,7 @@ export default function WhitelistPage() {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir("asc");
+      setSortDir(key === "created_at" ? "desc" : "asc");
     }
   };
 
@@ -172,7 +182,7 @@ export default function WhitelistPage() {
   }, [rows, search]);
 
   const filteredSorted = useMemo(() => {
-    const getter = SORTABLE[sortKey] || SORTABLE.name;
+    const getter = SORTABLE[sortKey] || SORTABLE.created_at;
     const dir = sortDir === "asc" ? 1 : -1;
 
     return [...filtered].sort((a, b) => {
@@ -236,6 +246,24 @@ export default function WhitelistPage() {
     setErr("");
   };
 
+  const openDelete = (row) => {
+    setErr("");
+    setDelRow(row);
+    setDelOpen(true);
+  };
+
+  const closeDelete = () => {
+    setDelOpen(false);
+    setDelRow(null);
+  };
+
+  const parseApiError = (e) => {
+    const detail = e?.response?.data?.detail;
+    if (detail) return String(detail);
+    const msg = e?.message || "Request failed";
+    return msg;
+  };
+
   const save = async () => {
     setErr("");
 
@@ -266,7 +294,13 @@ export default function WhitelistPage() {
       closeModal();
       await load();
     } catch (e) {
-      setErr(e?.response?.data?.detail || e?.message || "Save failed");
+      // ✅ handle overlap 409 cleanly
+      const msg = parseApiError(e);
+      if (String(e?.response?.status) === "409") {
+        setErr(msg || "Vehicle already exists for this period");
+      } else {
+        setErr(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -275,28 +309,31 @@ export default function WhitelistPage() {
   const toggle = async (row) => {
     setErr("");
     try {
+      // ✅ do not allow toggling expired
+      if ((row?.status || "").toLowerCase() === "expired") {
+        return setErr("Expired record cannot be toggled. Create a new entry.");
+      }
+
       setLoading(true);
       const next = row.status === "approved" ? "blocked" : "approved";
       await setWhitelistStatus(row.id, next);
       await load();
     } catch (e) {
-      setErr(e?.message || "Update failed");
+      setErr(parseApiError(e));
     } finally {
       setLoading(false);
     }
   };
 
-  const quickExtend7Days = async (row) => {
+  const doDelete = async () => {
     setErr("");
     try {
       setLoading(true);
-      const d = new Date(row.to_date);
-      d.setDate(d.getDate() + 7);
-      const nextTo = toInputDate(d);
-      await updateWhitelist(row.id, { to_date: nextTo });
+      await deleteWhitelist(delRow.id);
+      closeDelete();
       await load();
     } catch (e) {
-      setErr(e?.message || "Extend failed");
+      setErr(parseApiError(e));
     } finally {
       setLoading(false);
     }
@@ -418,72 +455,98 @@ export default function WhitelistPage() {
                   </button>
                 </th>
 
-                {/* ✅ REMOVED STATUS COLUMN */}
+                {/* ✅ STATUS COLUMN BACK */}
+                <th style={{ width: 120, textAlign: "center" }}>
+                  <button
+                    className="wThBtn center"
+                    onClick={() => onSort("status")}
+                    type="button"
+                  >
+                    Status <SortIcon col="status" />
+                  </button>
+                </th>
 
-                <th style={{ width: 280, textAlign: "center" }}>Actions</th>
+                <th style={{ width: 320, textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="wEmptyRow" colSpan={7}>
+                  <td className="wEmptyRow" colSpan={8}>
                     Loading...
                   </td>
                 </tr>
               ) : pageRows.length === 0 ? (
                 <tr>
-                  <td className="wEmptyRow" colSpan={7}>
+                  <td className="wEmptyRow" colSpan={8}>
                     No whitelist records
                   </td>
                 </tr>
               ) : (
-                pageRows.map((r) => (
-                  <tr key={r.id}>
-                    <td className="wStrong">{r.name}</td>
-                    <td className="wMono">{r.vehicle_number}</td>
-                    <td>{r.vehicle_type}</td>
-                    <td className="wMuted">{r.purpose || "-"}</td>
-                    <td style={{ textAlign: "center" }}>{r.from_date}</td>
-                    <td style={{ textAlign: "center" }}>{r.to_date}</td>
+                pageRows.map((r) => {
+                  const isExpired =
+                    (r?.status || "").toLowerCase() === "expired";
+                  return (
+                    <tr key={r.id} className={isExpired ? "wRowExpired" : ""}>
+                      <td className="wStrong">{r.name}</td>
+                      <td className="wMono">{r.vehicle_number}</td>
+                      <td>{r.vehicle_type}</td>
+                      <td className="wMuted">{r.purpose || "-"}</td>
+                      <td style={{ textAlign: "center" }}>{r.from_date}</td>
+                      <td style={{ textAlign: "center" }}>{r.to_date}</td>
 
-                    {/* ✅ REMOVED STATUS CELL */}
+                      <td style={{ textAlign: "center" }}>
+                        <StatusPill status={r.status} />
+                      </td>
 
-                    <td style={{ textAlign: "center" }}>
-                      <div className="wToggleRow">
-                        <button
-                          className={`wToggle ${r.status === "approved" ? "on" : "off"}`}
-                          onClick={() => toggle(r)}
-                          type="button"
-                          title="Toggle Approved/Blocked"
-                        >
-                          <span className="dot" />
-                          <span className="txt">
-                            {r.status === "approved" ? "Approved" : "Blocked"}
-                          </span>
-                        </button>
+                      <td style={{ textAlign: "center" }}>
+                        <div className="wToggleRow">
+                          <button
+                            className={`wToggle ${
+                              r.status === "approved" ? "on" : "off"
+                            } ${isExpired ? "disabled" : ""}`}
+                            onClick={() => toggle(r)}
+                            type="button"
+                            disabled={isExpired}
+                            title={
+                              isExpired
+                                ? "Expired cannot toggle"
+                                : "Toggle Approved/Blocked"
+                            }
+                          >
+                            <span className="dot" />
+                            <span className="txt">
+                              {isExpired
+                                ? "Expired"
+                                : r.status === "approved"
+                                  ? "Approved"
+                                  : "Blocked"}
+                            </span>
+                          </button>
 
-                        <button
-                          className="wBtnMini"
-                          type="button"
-                          onClick={() => quickExtend7Days(r)}
-                          title="Extend +7 days"
-                        >
-                          +7d
-                        </button>
+                          <button
+                            className="wIconBtnMini"
+                            type="button"
+                            onClick={() => openEdit(r)}
+                            title="Edit"
+                          >
+                            <Edit2 size={16} />
+                          </button>
 
-                        <button
-                          className="wIconBtnMini"
-                          type="button"
-                          onClick={() => openEdit(r)}
-                          title="Edit"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          <button
+                            className="wIconBtnMini danger"
+                            type="button"
+                            onClick={() => openDelete(r)}
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -553,11 +616,12 @@ export default function WhitelistPage() {
         </div>
 
         <div className="wHint">
-          Tip: Approved = whitelisted, Blocked = blacklisted. Validity is
-          checked using from_date/to_date.
+          Approved = whitelisted, Blocked = blacklisted, Expired = auto (to_date
+          passed). If expired, create a new entry for new date range.
         </div>
       </div>
 
+      {/* ADD/EDIT MODAL */}
       <Modal
         open={open}
         title={
@@ -677,6 +741,48 @@ export default function WhitelistPage() {
           >
             <Plus size={16} />
             {mode === "add" ? "Add Vehicle" : "Save Changes"}
+          </button>
+        </div>
+      </Modal>
+
+      {/* DELETE CONFIRM MODAL */}
+      <Modal
+        open={delOpen}
+        title="Delete Whitelist Entry"
+        onClose={() => {
+          if (!loading) closeDelete();
+        }}
+      >
+        <div className="wConfirmBox">
+          <div className="wConfirmIcon">
+            <AlertTriangle size={20} />
+          </div>
+          <div className="wConfirmText">
+            Are you sure you want to delete{" "}
+            <b className="wMono">{delRow?.vehicle_number}</b>?
+            <div className="wMuted" style={{ marginTop: 6 }}>
+              This cannot be undone.
+            </div>
+          </div>
+        </div>
+
+        <div className="wModalActions">
+          <button
+            className="wBtn"
+            type="button"
+            onClick={closeDelete}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            className="wBtn wBtnDanger"
+            type="button"
+            onClick={doDelete}
+            disabled={loading}
+          >
+            <Trash2 size={16} />
+            Delete
           </button>
         </div>
       </Modal>

@@ -20,6 +20,11 @@ export async function updateWhitelist(id, payload) {
   return res.data;
 }
 
+export async function deleteWhitelist(id) {
+  const res = await axios.delete(`${API_BASE}/api/vehicle-whitelist/${id}`);
+  return res.data;
+}
+
 export async function setWhitelistStatus(id, status) {
   const res = await axios.put(
     `${API_BASE}/api/vehicle-whitelist/${id}/status/${status}`,

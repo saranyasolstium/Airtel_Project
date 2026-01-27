@@ -1,5 +1,4 @@
 # app/schemas/camera.py
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -18,13 +17,13 @@ class CameraCreate(CameraBase):
 
 
 class CameraUpdate(BaseModel):
+    # ✅ allow editing camera_id also
+    camera_id: Optional[str] = None
     name: Optional[str] = None
     rtsp_url: Optional[str] = None
 
 
-# ✅ This is the response object your frontend can use directly
 class CameraOut(BaseModel):
-    # keep db fields
     id: int
     camera_id: str
     name: str
@@ -32,7 +31,6 @@ class CameraOut(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    # add UI fields expected by CameraGrid
     location: Optional[str] = None
     status: Literal["online", "warning", "offline"] = "offline"
     health: int = Field(default=0, ge=0, le=100)

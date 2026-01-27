@@ -232,31 +232,37 @@ export default function VehiclesPage() {
         <div className="vFilters">
           <div className="vField">
             <div className="vFieldLabel">From</div>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => {
-                const nextFrom = e.target.value || todayYYYYMMDD();
-                setOffset(0);
-                setDateFrom(nextFrom);
-                if (dateTo && dateTo < nextFrom) setDateTo(nextFrom);
-              }}
-              className="vInput"
-            />
+
+            <div className="vInputIcon">
+              <Clock size={16} />
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  const nextFrom = e.target.value || todayYYYYMMDD();
+                  setOffset(0);
+                  setDateFrom(nextFrom);
+                  if (dateTo && dateTo < nextFrom) setDateTo(nextFrom);
+                }}
+              />
+            </div>
           </div>
 
           <div className="vField">
             <div className="vFieldLabel">To</div>
-            <input
-              type="date"
-              value={dateTo}
-              min={dateFrom}
-              onChange={(e) => {
-                setOffset(0);
-                setDateTo(e.target.value || dateFrom);
-              }}
-              className="vInput"
-            />
+
+            <div className="vInputIcon">
+              <Clock size={16} />
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom}
+                onChange={(e) => {
+                  setOffset(0);
+                  setDateTo(e.target.value || dateFrom);
+                }}
+              />
+            </div>
           </div>
 
           <div className="vSearch">

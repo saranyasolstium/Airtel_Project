@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import date
 
 from app.database import get_db
 from app.schemas.vehicle_whitelist import (
@@ -13,6 +12,7 @@ from app.crud.vehicle_whitelist import (
     list_whitelist,
     update_whitelist,
     toggle_status,
+    delete_whitelist,
 )
 
 router = APIRouter(
@@ -23,7 +23,10 @@ router = APIRouter(
 
 @router.post("/", response_model=WhitelistOut)
 def add_vehicle(payload: WhitelistCreate, db: Session = Depends(get_db)):
-    return create_whitelist(db, payload)
+    try:
+        return create_whitelist(db, payload)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.get("/", response_model=list[WhitelistOut])
@@ -37,23 +40,37 @@ def update_vehicle(
     payload: WhitelistUpdate,
     db: Session = Depends(get_db),
 ):
-    obj = update_whitelist(db, row_id, payload)
+    try:
+        obj = update_whitelist(db, row_id, payload)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
     if not obj:
         raise HTTPException(404, "Vehicle not found")
+
     return obj
 
 
 @router.put("/{row_id}/status/{status}", response_model=WhitelistOut)
-def change_status(
-    row_id: int,
-    status: str,
-    db: Session = Depends(get_db),
-):
-    if status not in ("approved", "blocked"):
+def change_status(row_id: int, status: str, db: Session = Depends(get_db)):
+    if status not in ("approved", "blocked", "expired"):
         raise HTTPException(400, "Invalid status")
 
-    obj = toggle_status(db, row_id, status)
+    try:
+        obj = toggle_status(db, row_id, status)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
     if not obj:
         raise HTTPException(404, "Vehicle not found")
 
     return obj
+
+
+@router.delete("/{row_id}")
+def delete_vehicle(row_id: int, db: Session = Depends(get_db)):
+    ok = delete_whitelist(db, row_id)
+    if not ok:
+        raise HTTPException(404, "Vehicle not found")
+
+    return {"ok": True, "message": "Deleted successfully"}

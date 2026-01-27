@@ -26,7 +26,6 @@ class CameraCRUD:
         return items, total
 
     def create(self, camera_in: CameraCreate) -> Optional[Camera]:
-        # Check if camera already exists
         if self.get(camera_in.camera_id):
             return None
 
@@ -41,18 +40,34 @@ class CameraCRUD:
         logger.info(f"Created camera: {db_camera.camera_id}")
         return db_camera
 
+    # ✅ FIXED: camera_id rename supported
     def update(self, camera_id: str, camera_in: CameraUpdate) -> Optional[Camera]:
         db_camera = self.get(camera_id)
         if not db_camera:
             return None
 
         update_data = camera_in.dict(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(db_camera, field, value)
+
+        # ✅ handle camera_id change safely
+        new_camera_id = update_data.get("camera_id")
+        if new_camera_id and new_camera_id != camera_id:
+            # check duplicate
+            exists = self.get(new_camera_id)
+            if exists:
+                # return special marker by raising, or just None (router will map)
+                raise ValueError("camera_id already exists")
+
+            db_camera.camera_id = new_camera_id
+
+        # update remaining fields
+        if "name" in update_data:
+            db_camera.name = update_data["name"]
+        if "rtsp_url" in update_data:
+            db_camera.rtsp_url = update_data["rtsp_url"]
 
         self.db.commit()
         self.db.refresh(db_camera)
-        logger.info(f"Updated camera: {camera_id}")
+        logger.info(f"Updated camera: {camera_id} -> {db_camera.camera_id}")
         return db_camera
 
     def delete(self, camera_id: str) -> bool:
@@ -73,8 +88,6 @@ class CameraCRUD:
         ).offset(skip).limit(limit).all()
         total = len(items)
         return items, total
-
-# Factory function
 
 
 def get_camera_crud(db: Session) -> CameraCRUD:
