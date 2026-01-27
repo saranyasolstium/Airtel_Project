@@ -1,16 +1,15 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Literal, Optional
-
-IncidentType = Literal["crowd", "unauthorized"]
+from typing import Optional
 
 
 class IncidentAlertCreate(BaseModel):
-    incident_type: IncidentType = "crowd"
+    incident_type: str = "crowd"
+    object_type: Optional[str] = None
     zone_name: str
     camera_name: str
 
-    # optional for unauthorized
+    # only for crowd
     person_count: Optional[int] = Field(default=None, ge=0)
     max_count: Optional[int] = Field(default=None, ge=0)
 
@@ -19,16 +18,20 @@ class IncidentAlertCreate(BaseModel):
 
 class IncidentAlertOut(BaseModel):
     alert_id: int
-    incident_type: IncidentType
+    incident_type: str
+    object_type: Optional[str] = None
     zone_name: str
     camera_name: str
 
-    person_count: Optional[int]
-    max_count: Optional[int]
+    person_count: Optional[int] = None
+    max_count: Optional[int] = None
 
     timestamp: datetime
     image_base64: str
     message: str
+
+    alert_status: str
+    resolved_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

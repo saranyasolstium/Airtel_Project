@@ -257,11 +257,31 @@
   font-size: 12px;
 }
 
-/* severity tints */
+/* ===== CRITICAL (Nxtra RED) ===== */
 .tCritical {
-  border-color: rgba(255, 80, 80, 0.25);
-  box-shadow: 0 10px 24px rgba(255, 70, 70, 0.08);
+  border: 1px solid rgba(227, 27, 35, 0.45);
+  background: linear-gradient(
+    135deg,
+    rgba(227, 27, 35, 0.16),
+    rgba(0, 0, 0, 0.30)
+  );
+  box-shadow: 0 10px 24px rgba(227, 27, 35, 0.12);
 }
+
+/* pill red */
+.tCritical .tPill {
+  background: rgba(227, 27, 35, 0.22);
+  color: #ffb4b4; /* soft readable red */
+  border-color: rgba(227, 27, 35, 0.35);
+}
+
+/* icon wrap red */
+.tCritical .tIconWrap {
+  background: rgba(227, 27, 35, 0.22);
+  color: #ffd1d1;
+  border-color: rgba(227, 27, 35, 0.30);
+}
+
 /* ===== WARNING (Nxtra amber-red) ===== */
 .tWarning {
   border: 1px solid rgba(255, 122, 0, 0.45);

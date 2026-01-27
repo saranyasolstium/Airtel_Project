@@ -1,412 +1,662 @@
 // src/pages/DashboardAlerts.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import bg from "../assets/nxtra-bg.png";
-import { getAuth } from "../utils/storage";
+import {
+  AlertTriangle,
+  Users,
+  ShieldAlert,
+  Clock,
+  MapPin,
+  Camera,
+  RefreshCw,
+  Car,
+} from "lucide-react";
 
-export default function DashboardAlert() {
-  const auth = getAuth();
-  const user = auth?.user;
+import { listIncidentAlerts } from "../api/incidents";
+import { listTrafficFlowVehicles } from "../api/trafficFlow";
 
-  // Live time
+import "../styles/dashboardAlerts.css";
+
+// ✅ ADD: reuse same card UI styles from TrafficFlowPage
+import "../styles/traffic.css";
+
+/* ================= helpers ================= */
+const pad2 = (n) => String(n).padStart(2, "0");
+const toInputDate = (d) =>
+  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+function formatTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return String(ts);
+  return d.toLocaleString();
+}
+
+function toImgSrc(v) {
+  if (!v) return "";
+  if (String(v).startsWith("data:image")) return v;
+  if (/^[A-Za-z0-9+/=]+$/.test(v) && v.length > 200) {
+    return `data:image/jpeg;base64,${v}`;
+  }
+  return v;
+}
+
+// Traffic severity rules
+const computeSeverity = (dwellSeconds) => {
+  const s = Number(dwellSeconds || 0);
+  if (s >= 10 * 3600) return "CRITICAL";
+  if (s >= 2 * 3600) return "WARNING";
+  return "INFO";
+};
+
+/* ✅ message based on object_type + incident_type */
+function buildIncidentMessage(a) {
+  const it = (a?.incident_type || "").toLowerCase();
+  const ot = (a?.object_type || "").toLowerCase();
+
+  if (it === "crowd") {
+    const pc = a?.person_count ?? "-";
+    const mc = a?.max_count ?? "-";
+    return `Crowd detected. People ${pc} exceeded limit ${mc}.`;
+  }
+
+  if (ot.includes("vehicle"))
+    return "Unauthorized vehicle detected in restricted zone.";
+  if (ot.includes("hand")) return "Hand intrusion detected in restricted zone.";
+  if (ot.includes("door")) return "Door event detected in restricted zone.";
+  if (ot.includes("person") || ot.includes("people"))
+    return "Person detected in restricted zone.";
+
+  return a?.message || "Unauthorized activity detected.";
+}
+
+function incidentTag(type) {
+  const t = (type || "").toLowerCase();
+  if (t === "crowd") return { text: "Crowd", cls: "tagRed" };
+  if (t === "unauthorized") return { text: "Unauthorized", cls: "tagYellow" };
+  return { text: (type || "Alert").replaceAll("_", " "), cls: "tagBlue" };
+}
+
+/* ======= Severity mapping (same as TrafficFlowPage) ======= */
+const severityClass = (severity) => {
+  const s = (severity || "").toLowerCase();
+  if (s === "critical") return "tCard tCritical";
+  if (s === "warning") return "tCard tWarning";
+  return "tCard tInfo";
+};
+
+/* ================= Card (exactly like TrafficFlowPage) ================= */
+const DwellAlertCard = ({ alert }) => {
+  const sev = alert.severity || "INFO";
+
+  return (
+    <div className={severityClass(sev)}>
+      <div className="tCardRow">
+        <div className="tIconWrap">
+          <AlertTriangle size={18} />
+        </div>
+
+        <div className="tCardBody">
+          <div className="tPills">
+            <span className="tPill">{sev.toUpperCase()}</span>
+          </div>
+
+          <div className="tCardTitle">
+            <b>{alert.plate_text || "-"}</b> exceeded dwell time limit
+          </div>
+
+          <div className="tMeta">
+            <div className="tMetaItem">
+              <MapPin size={14} />
+              <span>{alert.location_text || "-"}</span>
+            </div>
+
+            <div className="tMetaItem">
+              <Clock size={14} />
+              <span>{alert.dwell_text || "-"}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ================= Page ================= */
+export default function DashboardAlerts() {
+  const POLL_MS = 5000;
+
   const [now, setNow] = useState(new Date());
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  const [incidentList, setIncidentList] = useState([]);
+  const [trafficList, setTrafficList] = useState([]);
+
+  const today = useMemo(() => toInputDate(new Date()), []);
+
+  // live clock
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Demo alerts
-  const [alerts, setAlerts] = useState([
-    {
-      id: 1,
-      type: "UNAUTHORIZED ENTRY",
-      status: "Active",
-      severity: "Critical",
-      message: "Person detected in restricted zone - Substation Room B",
-      cam: "CAM-012",
-      location: "North Perimeter",
-      time: "2026-01-24 11:59:12",
-    },
-    {
-      id: 2,
-      type: "PPE COMPLIANCE",
-      status: "Active",
-      severity: "Warning",
-      message: "Personnel without helmet detected in Data Floor 3",
-      cam: "CAM-045",
-      location: "Data Centre Floor 3",
-      time: "2026-01-24 11:52:40",
-    },
-    {
-      id: 3,
-      type: "CROWD FORMATION",
-      status: "Resolved",
-      severity: "Warning",
-      message: "Crowd density threshold exceeded near Entry Gate",
-      cam: "CAM-018",
-      location: "Main Gate",
-      time: "2026-01-24 11:35:08",
-    },
-  ]);
+  const loadAll = async () => {
+    setLoading(true);
+    setErr("");
 
-  const stats = useMemo(() => {
-    const total = alerts.length;
-    const active = alerts.filter((a) => a.status === "Active").length;
-    const critical = alerts.filter((a) => a.severity === "Critical").length;
-    const resolved = alerts.filter((a) => a.status === "Resolved").length;
-    return { total, active, critical, resolved };
-  }, [alerts]);
+    try {
+      // ============ INCIDENTS: last 10 ============
+      const inc = await listIncidentAlerts({
+        status: "active",
+        incident_type: "all",
+        limit: 300,
+      });
 
-  function resolveAlert(id) {
-    setAlerts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: "Resolved" } : a)),
-    );
-  }
+      const arr = Array.isArray(inc) ? inc : [];
+      arr.sort((a, b) => {
+        const ta = new Date(a?.timestamp || 0).getTime() || 0;
+        const tb = new Date(b?.timestamp || 0).getTime() || 0;
+        return tb - ta;
+      });
+      setIncidentList(arr.slice(0, 10));
 
-  function dismissAlert(id) {
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
-  }
+      // ============ TRAFFIC: last 10 ============
+      const tr = await listTrafficFlowVehicles({
+        limit: 10,
+        offset: 0,
+        date: today,
+        dwell_limit_seconds: 7200,
+      });
 
-  const dateStr = now.toLocaleDateString(undefined, {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-  const timeStr = now.toLocaleTimeString();
+      const rows = tr?.data || tr?.items || [];
+      const fixed = (Array.isArray(rows) ? rows : []).map((r) => ({
+        ...r,
+        severity: computeSeverity(r?.dwell_seconds),
+      }));
+
+      fixed.sort(
+        (a, b) => Number(b?.dwell_seconds || 0) - Number(a?.dwell_seconds || 0),
+      );
+
+      setTrafficList(fixed.slice(0, 10));
+    } catch (e) {
+      console.error(e);
+      setErr(e?.message || "Failed to load alerts");
+      setIncidentList([]);
+      setTrafficList([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // polling
+  useEffect(() => {
+    loadAll();
+    const t = setInterval(loadAll, POLL_MS);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <div style={styles.page(bg)}>
-      <div style={styles.overlay} />
-
-      {/* ✅ Only the main content — sidebar is already in DashboardLayout */}
-      <div style={styles.content}>
-        {/* Header */}
-        <div style={styles.headerRow}>
-          <div>
-            <div style={styles.h1}>Alerts Management</div>
-            <div style={styles.h2}>{dateStr}</div>
-            {user ? (
-              <div style={styles.userLine}>
-                Logged in as <b>{user.full_name || user.email}</b>
-              </div>
-            ) : null}
-          </div>
-
-          <div style={styles.headerRight}>
-            <div style={styles.clockChip}>🕒 {timeStr}</div>
-            <div style={styles.bell}>
-              🔔 <span style={styles.bellBadge}>3</span>
-            </div>
+    <div className="alPage">
+      {/* ======= Top header like your image ======= */}
+      <div className="alTop">
+        <div>
+          <div className="alHeading">Active Alerts</div>
+          <div className="alSub">
+            Showing last <b>10 Incident</b> alerts + last <b>10 Traffic</b>{" "}
+            alerts (auto refresh)
           </div>
         </div>
 
-        {/* KPI */}
-        <div style={styles.kpis}>
-          <Kpi label="Total Alerts" value={stats.total} />
-          <Kpi label="Active" value={stats.active} accent="warn" />
-          <Kpi label="Critical" value={stats.critical} accent="crit" />
-          <Kpi label="Resolved" value={stats.resolved} accent="ok" />
-        </div>
-
-        {/* List */}
-        <div style={styles.section}>
-          <div style={styles.sectionHead}>
-            <div style={styles.sectionTitle}>Alert Management</div>
-
-            <div style={styles.controls}>
-              <select style={styles.select}>
-                <option>All Alerts</option>
-                <option>Active</option>
-                <option>Resolved</option>
-                <option>Critical</option>
-              </select>
-
-              <select style={styles.select}>
-                <option>Latest First</option>
-                <option>Oldest First</option>
-              </select>
-
-              <button style={styles.exportBtn}>Export Report</button>
-            </div>
+        <div className="alTopRight">
+          <div className="alClock">
+            <Clock size={16} />
+            <span>{now.toLocaleTimeString()}</span>
           </div>
 
-          <div style={styles.list}>
-            {alerts.map((a) => (
-              <AlertCard
-                key={a.id}
-                a={a}
-                onResolve={() => resolveAlert(a.id)}
-                onDismiss={() => dismissAlert(a.id)}
+          <button className="alBtn" onClick={loadAll} disabled={loading}>
+            <RefreshCw size={16} className={loading ? "spin" : ""} />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {err ? <div className="alErr">{err}</div> : null}
+
+      {/* ======= INCIDENT LIST PANEL ======= */}
+      <div className="alPanel">
+        <div className="alPanelHead">
+          <div className="alPanelTitle">
+            <ShieldAlert size={18} />
+            Incident Alerts
+          </div>
+          <div className="alPanelHint">Last 10 (latest first)</div>
+        </div>
+
+        {incidentList.length === 0 ? (
+          <div className="alEmpty">No incident alerts</div>
+        ) : (
+          <div className="alList">
+            {incidentList.map((a) => {
+              const tag = incidentTag(a?.incident_type);
+              const isCrowd =
+                String(a?.incident_type || "").toLowerCase() === "crowd";
+
+              return (
+                <div key={a?.alert_id} className="alRow">
+                  <div
+                    className={`alIcon ${isCrowd ? "alIconRed" : "alIconOrange"}`}
+                  >
+                    {isCrowd ? <Users size={18} /> : <ShieldAlert size={18} />}
+                  </div>
+
+                  <div className="alBody">
+                    <div className="alTitleLine">
+                      <div className="alTitle">
+                        {isCrowd ? "Incident Alert" : "Unauthorized Alert"}
+                      </div>
+                      <span className={`alTag ${tag.cls}`}>{tag.text}</span>
+                    </div>
+
+                    <div className="alMsg">{buildIncidentMessage(a)}</div>
+
+                    <div className="alMeta">
+                      <span className="alMetaItem">
+                        <Camera size={14} />
+                        {a?.camera_name || "-"}
+                      </span>
+                      <span className="alMetaItem">
+                        <MapPin size={14} />
+                        {a?.zone_name || "-"}
+                      </span>
+                      <span className="alMetaItem">
+                        <Clock size={14} />
+                        {formatTime(a?.timestamp)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="alThumbBox">
+                    {a?.image_base64 ? (
+                      <img
+                        className="alThumb"
+                        src={toImgSrc(a.image_base64)}
+                        alt="incident"
+                      />
+                    ) : (
+                      <div className="alThumbEmpty">No image</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ======= TRAFFIC LIST PANEL (✅ NOW SAME AS TrafficFlowPage) ======= */}
+      <div className="alPanel">
+        <div className="alPanelHead">
+          <div className="alPanelTitle">
+            <AlertTriangle size={18} />
+            Traffic Flow Alerts
+          </div>
+          <div className="alPanelHint">Last 10 (today)</div>
+        </div>
+
+        {trafficList.length === 0 ? (
+          <div className="alEmpty">No traffic alerts today</div>
+        ) : (
+          <div className="tList" style={{ paddingTop: 0 }}>
+            {trafficList.map((t, idx) => (
+              <DwellAlertCard
+                key={t?.id ?? `${t?.plate_text}-${idx}`}
+                alert={{
+                  ...t,
+                  // ensure these fields exist so card shows properly
+                  plate_text: t?.plate_text,
+                  location_text: t?.location_text || t?.location || "-",
+                  dwell_text:
+                    t?.dwell_text ||
+                    t?.dwell_time ||
+                    `${Math.round(Number(t?.dwell_seconds || 0) / 60)} min`,
+                }}
               />
             ))}
           </div>
+        )}
+
+        <div className="alFoot">
+          Severity rule: &lt; 2h = Info • ≥ 2h = Warning • ≥ 10h = Critical
         </div>
       </div>
     </div>
   );
 }
 
-function Kpi({ label, value, accent }) {
-  const color =
-    accent === "crit"
-      ? "var(--nxtra-red)"
-      : accent === "ok"
-        ? "#22c55e"
-        : accent === "warn"
-          ? "#f59e0b"
-          : "rgba(255,255,255,0.92)";
+// // src/pages/DashboardAlerts.jsx
+// import React, { useEffect, useMemo, useState } from "react";
+// import {
+//   AlertTriangle,
+//   Users,
+//   ShieldAlert,
+//   Clock,
+//   MapPin,
+//   Camera,
+//   RefreshCw,
+//   Car,
+// } from "lucide-react";
 
-  return (
-    <div style={styles.kpiCard}>
-      <div style={styles.kpiLabel}>{label}</div>
-      <div style={{ ...styles.kpiValue, color }}>{value}</div>
-    </div>
-  );
-}
+// import { listIncidentAlerts } from "../api/incidents";
+// import { listTrafficFlowVehicles } from "../api/trafficFlow";
 
-function AlertCard({ a, onResolve, onDismiss }) {
-  const bg =
-    a.severity === "Critical"
-      ? "rgba(227,27,35,0.12)"
-      : "rgba(245,158,11,0.12)";
+// import "../styles/dashboardAlerts.css";
 
-  const border =
-    a.severity === "Critical"
-      ? "rgba(227,27,35,0.25)"
-      : "rgba(245,158,11,0.25)";
+// /* ================= helpers ================= */
+// const pad2 = (n) => String(n).padStart(2, "0");
+// const toInputDate = (d) =>
+//   `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
-  return (
-    <div
-      style={{
-        ...styles.alertCard,
-        background: bg,
-        border: `1px solid ${border}`,
-      }}
-    >
-      <div style={styles.alertTop}>
-        <div style={styles.alertIcon}>
-          {a.severity === "Critical" ? "⛔" : "⚠️"}
-        </div>
+// function formatTime(ts) {
+//   if (!ts) return "";
+//   const d = new Date(ts);
+//   if (Number.isNaN(d.getTime())) return String(ts);
+//   return d.toLocaleString();
+// }
 
-        <div style={{ flex: 1 }}>
-          <div style={styles.alertTypeRow}>
-            <div style={styles.alertType}>{a.type}</div>
-            <div style={styles.pill(a.status)}>{a.status}</div>
-          </div>
+// function toImgSrc(v) {
+//   if (!v) return "";
+//   if (String(v).startsWith("data:image")) return v;
+//   // raw base64
+//   if (/^[A-Za-z0-9+/=]+$/.test(v) && v.length > 200) {
+//     return `data:image/jpeg;base64,${v}`;
+//   }
+//   return v; // url
+// }
 
-          <div style={styles.alertMsg}>{a.message}</div>
+// // Traffic severity rules (same as you used)
+// const computeSeverity = (dwellSeconds) => {
+//   const s = Number(dwellSeconds || 0);
+//   if (s >= 10 * 3600) return "CRITICAL";
+//   if (s >= 2 * 3600) return "WARNING";
+//   return "INFO";
+// };
 
-          <div style={styles.metaRow}>
-            <div style={styles.meta}>👁 {a.cam}</div>
-            <div style={styles.meta}>📍 {a.location}</div>
-            <div style={styles.meta}>🕒 {a.time}</div>
-            <div style={styles.meta}>ID: {a.id}</div>
-          </div>
+// /* ✅ message based on object_type + incident_type */
+// function buildIncidentMessage(a) {
+//   const it = (a?.incident_type || "").toLowerCase();
+//   const ot = (a?.object_type || "").toLowerCase();
 
-          <div style={styles.btnRow}>
-            <button style={styles.viewBtn}>View Details</button>
-            {a.status !== "Resolved" ? (
-              <button style={styles.resolveBtn} onClick={onResolve}>
-                Resolve
-              </button>
-            ) : null}
-            <button style={styles.dismissBtn} onClick={onDismiss}>
-              Dismiss
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+//   if (it === "crowd") {
+//     const pc = a?.person_count ?? "-";
+//     const mc = a?.max_count ?? "-";
+//     return `Crowd detected. People ${pc} exceeded limit ${mc}.`;
+//   }
 
-const styles = {
-  page: (bgUrl) => ({
-    position: "relative",
-    minHeight: "calc(100vh - 36px)",
-    borderRadius: 18,
-    overflow: "hidden",
-    backgroundImage: `url(${bgUrl})`,
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-  }),
-  overlay: {
-    position: "absolute",
-    inset: 0,
-    background: "linear-gradient(180deg, rgba(0,0,0,0.30), rgba(0,0,0,0.55))",
-    pointerEvents: "none",
-  },
-  content: { position: "relative", zIndex: 2, padding: 18 },
+//   if (ot.includes("vehicle"))
+//     return "Unauthorized vehicle detected in restricted zone.";
+//   if (ot.includes("hand")) return "Hand intrusion detected in restricted zone.";
+//   if (ot.includes("door")) return "Door event detected in restricted zone.";
+//   if (ot.includes("person") || ot.includes("people"))
+//     return "Person detected in restricted zone.";
 
-  headerRow: { display: "flex", justifyContent: "space-between", gap: 16 },
-  h1: { fontSize: 30, fontWeight: 900, color: "rgba(255,255,255,0.95)" },
-  h2: { color: "rgba(255,255,255,0.70)", marginTop: 6 },
-  userLine: { marginTop: 6, color: "rgba(255,255,255,0.70)", fontSize: 13 },
+//   return a?.message || "Unauthorized activity detected.";
+// }
 
-  headerRight: { display: "flex", gap: 12, alignItems: "center" },
-  clockChip: {
-    padding: "10px 12px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.18)",
-    color: "rgba(255,255,255,0.92)",
-    fontWeight: 900,
-  },
-  bell: {
-    position: "relative",
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    display: "grid",
-    placeItems: "center",
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.18)",
-    color: "rgba(255,255,255,0.92)",
-  },
-  bellBadge: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    width: 22,
-    height: 22,
-    borderRadius: 999,
-    display: "grid",
-    placeItems: "center",
-    background: "var(--nxtra-red)",
-    color: "white",
-    fontWeight: 900,
-    fontSize: 12,
-  },
+// function incidentTag(type) {
+//   const t = (type || "").toLowerCase();
+//   if (t === "crowd") return { text: "Crowd", cls: "tagRed" };
+//   if (t === "unauthorized") return { text: "Unauthorized", cls: "tagYellow" };
+//   return { text: (type || "Alert").replaceAll("_", " "), cls: "tagBlue" };
+// }
 
-  kpis: {
-    marginTop: 18,
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: 12,
-  },
-  kpiCard: {
-    borderRadius: 16,
-    padding: 16,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.18)",
-  },
-  kpiLabel: { color: "rgba(255,255,255,0.70)", fontSize: 13 },
-  kpiValue: { marginTop: 10, fontSize: 32, fontWeight: 900 },
+// function trafficTag(sev) {
+//   const s = (sev || "").toLowerCase();
+//   if (s === "critical") return { text: "Critical", cls: "tagRed" };
+//   if (s === "warning") return { text: "Warning", cls: "tagYellow" };
+//   return { text: "Info", cls: "tagBlue" };
+// }
 
-  section: {
-    marginTop: 16,
-    borderRadius: 16,
-    padding: 16,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.18)",
-  },
-  sectionHead: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 900,
-    color: "rgba(255,255,255,0.95)",
-  },
+// export default function DashboardAlerts() {
+//   const POLL_MS = 5000;
 
-  controls: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-  select: {
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.18)",
-    background: "rgba(0,0,0,0.18)",
-    color: "rgba(255,255,255,0.90)",
-    outline: "none",
-  },
-  exportBtn: {
-    padding: "10px 14px",
-    borderRadius: 12,
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 900,
-    color: "white",
-    background:
-      "linear-gradient(180deg, var(--nxtra-red), var(--nxtra-red-dark))",
-    boxShadow: "0 12px 30px rgba(227, 27, 35, 0.18)",
-  },
+//   const [now, setNow] = useState(new Date());
+//   const [loading, setLoading] = useState(false);
+//   const [err, setErr] = useState("");
 
-  list: { display: "flex", flexDirection: "column", gap: 14 },
+//   const [incidentList, setIncidentList] = useState([]);
+//   const [trafficList, setTrafficList] = useState([]);
 
-  alertCard: { borderRadius: 16, padding: 14 },
-  alertTop: { display: "flex", gap: 12, alignItems: "flex-start" },
-  alertIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    display: "grid",
-    placeItems: "center",
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.18)",
-    fontSize: 18,
-  },
-  alertTypeRow: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  alertType: { fontWeight: 900, color: "rgba(255,255,255,0.92)" },
-  pill: (status) => ({
-    padding: "6px 10px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 900,
-    background:
-      status === "Resolved" ? "rgba(34,197,94,0.16)" : "rgba(227,27,35,0.16)",
-    color: status === "Resolved" ? "#22c55e" : "var(--nxtra-red)",
-    border: "1px solid rgba(255,255,255,0.14)",
-  }),
-  alertMsg: { marginTop: 6, fontSize: 15, color: "rgba(255,255,255,0.90)" },
-  metaRow: {
-    marginTop: 10,
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: 10,
-    color: "rgba(255,255,255,0.70)",
-    fontSize: 12,
-  },
-  meta: { display: "flex", gap: 6, alignItems: "center" },
+//   const today = useMemo(() => toInputDate(new Date()), []);
 
-  btnRow: { marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" },
-  viewBtn: {
-    padding: "8px 12px",
-    borderRadius: 12,
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 900,
-    color: "white",
-    background: "rgba(37,99,235,0.85)",
-  },
-  resolveBtn: {
-    padding: "8px 12px",
-    borderRadius: 12,
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 900,
-    color: "white",
-    background: "rgba(34,197,94,0.85)",
-  },
-  dismissBtn: {
-    padding: "8px 12px",
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.18)",
-    cursor: "pointer",
-    fontWeight: 900,
-    background: "rgba(0,0,0,0.18)",
-    color: "rgba(255,255,255,0.90)",
-  },
-};
+//   // live clock
+//   useEffect(() => {
+//     const t = setInterval(() => setNow(new Date()), 1000);
+//     return () => clearInterval(t);
+//   }, []);
+
+//   const loadAll = async () => {
+//     setLoading(true);
+//     setErr("");
+
+//     try {
+//       // ============ INCIDENTS: last 10 ============
+//       const inc = await listIncidentAlerts({
+//         status: "active",
+//         incident_type: "all",
+//         limit: 300,
+//       });
+
+//       const arr = Array.isArray(inc) ? inc : [];
+//       arr.sort((a, b) => {
+//         const ta = new Date(a?.timestamp || 0).getTime() || 0;
+//         const tb = new Date(b?.timestamp || 0).getTime() || 0;
+//         return tb - ta;
+//       });
+
+//       setIncidentList(arr.slice(0, 10));
+
+//       // ============ TRAFFIC: last 10 ============
+//       const tr = await listTrafficFlowVehicles({
+//         limit: 10,
+//         offset: 0,
+//         date: today,
+//         dwell_limit_seconds: 7200,
+//       });
+
+//       const rows = tr?.data || tr?.items || [];
+//       const fixed = (Array.isArray(rows) ? rows : []).map((r) => ({
+//         ...r,
+//         severity: computeSeverity(r?.dwell_seconds),
+//       }));
+
+//       // latest first / most severe first (choose what you want)
+//       fixed.sort(
+//         (a, b) => Number(b?.dwell_seconds || 0) - Number(a?.dwell_seconds || 0),
+//       );
+//       setTrafficList(fixed.slice(0, 10));
+//     } catch (e) {
+//       console.error(e);
+//       setErr(e?.message || "Failed to load alerts");
+//       setIncidentList([]);
+//       setTrafficList([]);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   // polling
+//   useEffect(() => {
+//     loadAll();
+//     const t = setInterval(loadAll, POLL_MS);
+//     return () => clearInterval(t);
+//     // eslint-disable-next-line react-hooks/exhaustive-deps
+//   }, []);
+
+//   return (
+//     <div className="alPage">
+//       {/* ======= Top header like your image ======= */}
+//       <div className="alTop">
+//         <div>
+//           <div className="alHeading">Active Alerts</div>
+//           <div className="alSub">
+//             Showing last <b>10 Incident</b> alerts + last <b>10 Traffic</b>{" "}
+//             alerts (auto refresh)
+//           </div>
+//         </div>
+
+//         <div className="alTopRight">
+//           <div className="alClock">
+//             <Clock size={16} />
+//             <span>{now.toLocaleTimeString()}</span>
+//           </div>
+
+//           <button className="alBtn" onClick={loadAll} disabled={loading}>
+//             <RefreshCw size={16} className={loading ? "spin" : ""} />
+//             Refresh
+//           </button>
+//         </div>
+//       </div>
+
+//       {err ? <div className="alErr">{err}</div> : null}
+
+//       {/* ======= INCIDENT LIST PANEL ======= */}
+//       <div className="alPanel">
+//         <div className="alPanelHead">
+//           <div className="alPanelTitle">
+//             <ShieldAlert size={18} />
+//             Incident Alerts
+//           </div>
+//           <div className="alPanelHint">Last 10 (latest first)</div>
+//         </div>
+
+//         {incidentList.length === 0 ? (
+//           <div className="alEmpty">No incident alerts</div>
+//         ) : (
+//           <div className="alList">
+//             {incidentList.map((a) => {
+//               const tag = incidentTag(a?.incident_type);
+//               const isCrowd =
+//                 String(a?.incident_type || "").toLowerCase() === "crowd";
+
+//               return (
+//                 <div key={a?.alert_id} className="alRow">
+//                   <div
+//                     className={`alIcon ${isCrowd ? "alIconRed" : "alIconOrange"}`}
+//                   >
+//                     {isCrowd ? <Users size={18} /> : <ShieldAlert size={18} />}
+//                   </div>
+
+//                   <div className="alBody">
+//                     <div className="alTitleLine">
+//                       <div className="alTitle">
+//                         {isCrowd ? "Incident Alert" : "Unauthorized Alert"}
+//                       </div>
+//                       <span className={`alTag ${tag.cls}`}>{tag.text}</span>
+//                     </div>
+
+//                     <div className="alMsg">{buildIncidentMessage(a)}</div>
+
+//                     <div className="alMeta">
+//                       <span className="alMetaItem">
+//                         <Camera size={14} />
+//                         {a?.camera_name || "-"}
+//                       </span>
+//                       <span className="alMetaItem">
+//                         <MapPin size={14} />
+//                         {a?.zone_name || "-"}
+//                       </span>
+//                       <span className="alMetaItem">
+//                         <Clock size={14} />
+//                         {formatTime(a?.timestamp)}
+//                       </span>
+//                     </div>
+//                   </div>
+
+//                   <div className="alThumbBox">
+//                     {a?.image_base64 ? (
+//                       <img
+//                         className="alThumb"
+//                         src={toImgSrc(a.image_base64)}
+//                         alt="incident"
+//                       />
+//                     ) : (
+//                       <div className="alThumbEmpty">No image</div>
+//                     )}
+//                   </div>
+//                 </div>
+//               );
+//             })}
+//           </div>
+//         )}
+//       </div>
+
+//       {/* ======= TRAFFIC LIST PANEL ======= */}
+//       <div className="alPanel">
+//         <div className="alPanelHead">
+//           <div className="alPanelTitle">
+//             <AlertTriangle size={18} />
+//             Traffic Flow Alerts
+//           </div>
+//           <div className="alPanelHint">Last 10 (today)</div>
+//         </div>
+
+//         {trafficList.length === 0 ? (
+//           <div className="alEmpty">No traffic alerts today</div>
+//         ) : (
+//           <div className="alList">
+//             {trafficList.map((t, idx) => {
+//               const sev = trafficTag(t?.severity);
+//               return (
+//                 <div
+//                   key={t?.id ?? `${t?.plate_text}-${idx}`}
+//                   className="alRow alRowTraffic"
+//                 >
+//                   <div className="alIcon alIconBlue">
+//                     <Car size={18} />
+//                   </div>
+
+//                   <div className="alBody">
+//                     <div className="alTitleLine">
+//                       <div className="alTitle">Traffic Flow Alert</div>
+//                       <span className={`alTag ${sev.cls}`}>{sev.text}</span>
+//                     </div>
+
+//                     <div className="alMsg">
+//                       Vehicle <b>{t?.plate_text || "-"}</b> exceeded dwell time.
+//                     </div>
+
+//                     <div className="alMeta">
+//                       <span className="alMetaItem">
+//                         <MapPin size={14} />
+//                         {t?.location_text || "-"}
+//                       </span>
+//                       <span className="alMetaItem">
+//                         <Clock size={14} />
+//                         {t?.dwell_text ||
+//                           `${Math.round(Number(t?.dwell_seconds || 0) / 60)} min`}
+//                       </span>
+//                     </div>
+//                   </div>
+
+//                   {/* no image in traffic → keep same right box but smaller */}
+//                   <div className="alThumbBox alThumbBoxSmall">
+//                     <div className="alThumbEmpty">
+//                       <b>{t?.plate_text || "-"}</b>
+//                       <div className="alSmallMuted">{sev.text}</div>
+//                     </div>
+//                   </div>
+//                 </div>
+//               );
+//             })}
+//           </div>
+//         )}
+
+//         <div className="alFoot">
+//           Severity rule: &lt; 2h = Info • ≥ 2h = Warning • ≥ 10h = Critical
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }

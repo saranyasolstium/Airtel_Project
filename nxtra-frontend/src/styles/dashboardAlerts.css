@@ -1,0 +1,295 @@
+/* src/styles/dashboardAlerts.css */
+
+.alPage {
+  padding: 20px 22px 34px;
+  color: #fff;
+}
+
+/* ===== top header ===== */
+.alTop {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.alHeading {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  text-shadow: 0 10px 30px rgba(0,0,0,0.55);
+}
+
+.alSub {
+  margin-top: 6px;
+  color: rgba(255,255,255,0.70);
+  font-size: 13px;
+}
+
+.alTopRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.alClock {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.18);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 34px rgba(0,0,0,0.30);
+  color: rgba(255,255,255,0.95);
+  font-weight: 800;
+}
+
+.alBtn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.92);
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.alBtn:hover { background: rgba(255,255,255,0.14); }
+.alBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.alErr {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 60, 60, 0.14);
+  border: 1px solid rgba(255, 60, 60, 0.28);
+  color: rgba(255,255,255,0.92);
+}
+
+/* ===== panel (glass) ===== */
+.alPanel {
+  border-radius: 22px;
+  background: rgba(16, 22, 36, 0.42);
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 22px 60px rgba(0,0,0,0.45);
+  backdrop-filter: blur(14px);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.alPanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+
+.alPanelTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 900;
+  font-size: 16px;
+  color: rgba(255,255,255,0.95);
+}
+
+.alPanelHint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.65);
+}
+
+.alEmpty {
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px dashed rgba(255,255,255,0.16);
+  color: rgba(255,255,255,0.75);
+}
+
+/* ===== list ===== */
+.alList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ===== row like your screenshot ===== */
+.alRow {
+  display: grid;
+  grid-template-columns: 44px 1fr 150px; /* icon | content | thumbnail */
+  gap: 12px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .alRow {
+    grid-template-columns: 44px 1fr;
+  }
+  .alThumbBox {
+    grid-column: 1 / -1;
+    height: 140px;
+  }
+}
+
+.alRowTraffic {
+  grid-template-columns: 44px 1fr 120px;
+}
+
+/* ===== left icon ===== */
+.alIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.10);
+}
+
+.alIconRed {
+  background: rgba(255, 50, 50, 0.16);
+  border-color: rgba(255, 80, 80, 0.22);
+}
+
+.alIconOrange {
+  background: rgba(255, 170, 40, 0.14);
+  border-color: rgba(255, 170, 40, 0.22);
+}
+
+.alIconBlue {
+  background: rgba(90, 170, 255, 0.14);
+  border-color: rgba(90, 170, 255, 0.22);
+}
+
+/* ===== content ===== */
+.alBody { min-width: 0; }
+
+.alTitleLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.alTitle {
+  font-weight: 900;
+  font-size: 15px;
+  color: rgba(255,255,255,0.95);
+}
+
+.alTag {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.92);
+  white-space: nowrap;
+}
+
+.tagRed {
+  background: rgba(255, 50, 50, 0.18);
+  border-color: rgba(255, 80, 80, 0.28);
+}
+
+.tagYellow {
+  background: rgba(255, 200, 40, 0.18);
+  border-color: rgba(255, 200, 40, 0.28);
+  color: rgba(255,255,255,0.95);
+}
+
+.tagBlue {
+  background: rgba(90, 170, 255, 0.16);
+  border-color: rgba(90, 170, 255, 0.28);
+}
+
+.alMsg {
+  margin-top: 6px;
+  padding: 9px 10px;
+  border-radius: 14px;
+  background: rgba(0,0,0,0.18);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.90);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.alMeta {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.alMetaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.75);
+  font-size: 12px;
+}
+
+/* ===== right thumbnail ===== */
+.alThumbBox {
+  width: 100%;
+  height: 94px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.18);
+  display: grid;
+  place-items: center;
+}
+
+.alThumbBoxSmall {
+  height: 78px;
+}
+
+.alThumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.alThumbEmpty {
+  padding: 10px;
+  text-align: center;
+  color: rgba(255,255,255,0.78);
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.alSmallMuted {
+  margin-top: 4px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.60);
+  font-size: 11px;
+}
+
+/* footer */
+.alFoot {
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.58);
+}
