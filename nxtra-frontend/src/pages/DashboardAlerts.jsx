@@ -123,7 +123,7 @@ const DwellAlertCard = ({ alert }) => {
 
 /* ================= Page ================= */
 export default function DashboardAlerts() {
-  const POLL_MS = 5000;
+  const POLL_MS = 10 * 60 * 1000;
 
   const [now, setNow] = useState(new Date());
   const [loading, setLoading] = useState(false);

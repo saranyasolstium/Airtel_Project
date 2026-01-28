@@ -17,11 +17,10 @@ class VehicleLogCreate(BaseModel):
 
     location: Optional[str] = None
 
-    # ✅ table has these, keep them
     capture_image_entry: Optional[str] = None
     capture_image_exit: Optional[str] = None
 
-    # ✅ compatibility: some clients still send capture_image
+    # ✅ old client support
     capture_image: Optional[str] = None
 
     entry_camera_name: Optional[str] = None
@@ -75,13 +74,11 @@ def push_vehicle_log(payload: VehicleLogCreate, db: Session = Depends(get_db)):
     try:
         data = payload.model_dump(by_alias=True)
 
-        # ✅ if client sends capture_image, store it as capture_image_entry
+        # ✅ old key compatibility
         if (not data.get("capture_image_entry")) and data.get("capture_image"):
             data["capture_image_entry"] = data.get("capture_image")
 
         obj = vehicle_crud.upsert_vehicle_log_by_plate(db, data)
-
-        # ✅ prevent ResponseValidationError
         if obj is None:
             raise HTTPException(
                 status_code=500, detail="Vehicle log upsert returned None")
@@ -90,12 +87,9 @@ def push_vehicle_log(payload: VehicleLogCreate, db: Session = Depends(get_db)):
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
     except HTTPException:
         raise
-
     except Exception as e:
-        # ✅ show real error in response
         raise HTTPException(status_code=500, detail=f"Server error: {e}")
 
 
@@ -122,6 +116,5 @@ def get_vehicle_logs(
         offset=offset,
     )
     total = vehicle_crud.count_vehicle_logs(
-        db, search=search, date_from=date_from, date_to=date_to
-    )
+        db, search=search, date_from=date_from, date_to=date_to)
     return {"items": items, "total": total, "limit": limit, "offset": offset}
