@@ -293,3 +293,81 @@
   font-size: 12px;
   color: rgba(255,255,255,0.58);
 }
+
+
+/* ===== Mini KPI row (top right) ===== */
+.daKpiRow {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  margin-right: 10px;
+}
+
+/* circle */
+.daKpi {
+  width: 100px;
+  height: 100px;
+  border-radius: 999px;
+  position: relative;
+  background: rgba(20, 20, 20, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+}
+
+.daKpi::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(255, 255, 255, 0.35),
+    rgba(255, 255, 255, 0.02) 55%,
+    rgba(0, 0, 0, 0.25) 85%
+  );
+  pointer-events: none;
+}
+
+/* colored ring feel */
+.daKpi.blue {
+  outline: 3px solid rgba(60, 150, 255, 0.7);
+}
+.daKpi.green {
+  outline: 3px solid rgba(60, 220, 170, 0.7);
+}
+.daKpi.red {
+  outline: 3px solid rgba(255, 80, 90, 0.75);
+}
+.daKpi.gray {
+  outline: 3px solid rgba(180, 180, 180, 0.45);
+}
+
+.daKpiInner {
+  position: relative;
+  text-align: center;
+  line-height: 1.05;
+}
+
+.daKpiVal {
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+}
+
+.daKpiLabel {
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.daKpiSub {
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+}

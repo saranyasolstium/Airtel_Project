@@ -10,6 +10,9 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
+  Bike,
+  Bus,
+  Truck,
 } from "lucide-react";
 
 import { listVehicleLogs } from "../api/vehicleLogs";
@@ -64,6 +67,34 @@ function formatAvg(seconds) {
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
 }
+
+/* ✅ Vehicle type badge */
+const normalizeType = (t) =>
+  String(t || "car")
+    .trim()
+    .toLowerCase();
+
+const VehicleTypeBadge = ({ type }) => {
+  const t = normalizeType(type);
+
+  const meta =
+    t === "bike" || t === "motorcycle"
+      ? { label: "Bike", Icon: Bike, cls: "vt-bike" }
+      : t === "bus"
+        ? { label: "Bus", Icon: Bus, cls: "vt-bus" }
+        : t === "truck"
+          ? { label: "Truck", Icon: Truck, cls: "vt-truck" }
+          : { label: "Car", Icon: Car, cls: "vt-car" };
+
+  const IconComp = meta.Icon;
+
+  return (
+    <span className={`vtBadge ${meta.cls}`}>
+      <IconComp size={14} />
+      {meta.label}
+    </span>
+  );
+};
 
 /* ========================= Modal ========================= */
 const ImagePreviewModal = ({ open, onClose, imageUrl, title }) => {
@@ -162,7 +193,7 @@ export default function VehiclesPage() {
     [logs],
   );
 
-  /* ✅ AVG DWELL: exited vehicles only (recommended) */
+  /* ✅ AVG DWELL: exited vehicles only */
   const avgDwellSecondsExited = useMemo(() => {
     const rows = logs.filter((r) => {
       const exited = Boolean(r.exit_time);
@@ -287,6 +318,7 @@ export default function VehiclesPage() {
             <thead>
               <tr>
                 <th style={{ width: 210 }}>Capture</th>
+                <th style={{ width: 140, textAlign: "center" }}>Type</th>
                 <th style={{ width: 140 }}>Plate</th>
                 <th style={{ width: 160, textAlign: "center" }}>Whitelist</th>
                 <th style={{ width: 240, textAlign: "center" }}>Entry</th>
@@ -300,13 +332,13 @@ export default function VehiclesPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="vEmptyRow">
+                  <td colSpan={9} className="vEmptyRow">
                     Loading...
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="vEmptyRow">
+                  <td colSpan={9} className="vEmptyRow">
                     No records for this date range.
                   </td>
                 </tr>
@@ -319,6 +351,8 @@ export default function VehiclesPage() {
                   );
                   const exitImgSrc = toImageSrc(row.capture_image_exit);
                   const thumbSrc = entryImgSrc || exitImgSrc;
+
+                  const vType = row.type || row.event_type; // ✅ supports both
 
                   return (
                     <tr key={row.id}>
@@ -344,9 +378,7 @@ export default function VehiclesPage() {
                                 setPreview({
                                   open: true,
                                   imageUrl: entryImgSrc,
-                                  title: `Entry Capture - ${
-                                    row.plate_text || ""
-                                  }`,
+                                  title: `Entry Capture - ${row.plate_text || ""}`,
                                 })
                               }
                             >
@@ -370,6 +402,10 @@ export default function VehiclesPage() {
                             </button>
                           </div>
                         </div>
+                      </td>
+
+                      <td style={{ textAlign: "center" }}>
+                        <VehicleTypeBadge type={vType} />
                       </td>
 
                       <td className="vPlate">{row.plate_text || "-"}</td>

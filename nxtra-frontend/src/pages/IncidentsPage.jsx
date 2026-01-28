@@ -5,6 +5,7 @@ import {
   listIncidentAlerts,
   resolveIncidentAlert,
   getIncidentFilters,
+  getIncidentAlertStats, // ✅ NEW
 } from "../api/incidents";
 
 /* ------------------------- Helpers ------------------------- */
@@ -55,6 +56,38 @@ function buildIncidentMessage(a) {
   return a?.message || "Unauthorized activity detected.";
 }
 
+/* ------------------------- KPI Ring UI ------------------------- */
+function KpiRing({ value, label, sub, percent = 0, color = "blue" }) {
+  const pct = Math.max(0, Math.min(100, Number(percent || 0)));
+  const dash = `${pct},100`;
+
+  return (
+    <div className={`kpiCard ${color}`}>
+      <svg className="kpiSvg" viewBox="0 0 36 36">
+        <path
+          className="kpiBg"
+          d="M18 2.0845
+             a 15.9155 15.9155 0 0 1 0 31.831
+             a 15.9155 15.9155 0 0 1 0 -31.831"
+        />
+        <path
+          className="kpiProg"
+          strokeDasharray={dash}
+          d="M18 2.0845
+             a 15.9155 15.9155 0 0 1 0 31.831
+             a 15.9155 15.9155 0 0 1 0 -31.831"
+        />
+      </svg>
+
+      <div className="kpiMid">
+        <div className="kpiVal">{value}</div>
+        <div className="kpiLabel">{label}</div>
+        <div className="kpiSub">{sub}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function IncidentsPage() {
   // Filters
   const [incidentType, setIncidentType] = useState("all");
@@ -81,6 +114,15 @@ export default function IncidentsPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
+  // ✅ Stats (store full payload so we can use by_type)
+  const [stats, setStats] = useState({
+    total: 0,
+    active: 0,
+    resolved: 0,
+    by_type: {},
+  });
+  const [statsLoading, setStatsLoading] = useState(false);
+
   // Modal
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -105,7 +147,7 @@ export default function IncidentsPage() {
     return () => ac.abort();
   }, []);
 
-  // ✅ Options: ONLY from backend (NO STATIC BASE)
+  // ✅ Options: ONLY from backend
   const incidentOptions = useMemo(() => {
     const list = (filterOptions.incident_types || [])
       .filter(Boolean)
@@ -131,7 +173,39 @@ export default function IncidentsPage() {
     setPage(1);
   }, [incidentType, camera, objectType, pageSize, selectedDate]);
 
-  // Load alerts
+  // ✅ Fetch STATS (total/active/resolved + by_type) for selected date + incident type
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
+      setStatsLoading(true);
+      try {
+        const payload = await getIncidentAlertStats(
+          {
+            incident_type: incidentType || "all",
+            date: selectedDate, // YYYY-MM-DD
+          },
+          { signal: ac.signal },
+        );
+
+        const summary = payload?.summary || {};
+        const byType = payload?.by_type || {};
+
+        setStats({
+          total: Number(summary.total || 0),
+          active: Number(summary.active || 0),
+          resolved: Number(summary.resolved || 0),
+          by_type: byType,
+        });
+      } catch {
+        setStats({ total: 0, active: 0, resolved: 0, by_type: {} });
+      } finally {
+        setStatsLoading(false);
+      }
+    })();
+    return () => ac.abort();
+  }, [incidentType, selectedDate]);
+
+  // Load alerts (active only)
   useEffect(() => {
     const ac = new AbortController();
 
@@ -191,11 +265,22 @@ export default function IncidentsPage() {
     return alerts.slice(start, end);
   }, [alerts, safePage, pageSize]);
 
-  const countText = useMemo(() => {
-    if (loading) return "Loading…";
-    if (err) return "Error";
-    return `Showing ${pageItems.length} / ${total}`;
-  }, [loading, err, pageItems.length, total]);
+  // derived counts for rings
+  const crowd = stats?.by_type?.crowd || { total: 0, active: 0, resolved: 0 };
+  const unauth = stats?.by_type?.unauthorized || {
+    total: 0,
+    active: 0,
+    resolved: 0,
+  };
+
+  const otherTotal = Math.max(
+    0,
+    (stats.total || 0) - ((crowd.total || 0) + (unauth.total || 0)),
+  );
+  const otherActive = Math.max(
+    0,
+    (stats.active || 0) - ((crowd.active || 0) + (unauth.active || 0)),
+  );
 
   // Actions
   async function onResolve(a) {
@@ -291,22 +376,6 @@ export default function IncidentsPage() {
               onChange={(e) => setSelectedDate(e.target.value)}
             />
           </div>
-
-          {/* Rows */}
-          <div className="iFilter">
-            <label className="iLabel">Rows</label>
-            <select
-              className="iSelect"
-              value={pageSize}
-              onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
-            >
-              <option value={6}>6</option>
-              <option value={9}>9</option>
-              <option value={12}>12</option>
-              <option value={15}>15</option>
-              <option value={18}>18</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -315,15 +384,65 @@ export default function IncidentsPage() {
         <div className="iPanelHeader">
           <div>
             <div className="iTitle">Alerts</div>
-            <div className="iSub">
-              {err ? (
-                <span className="iErr">{err}</span>
-              ) : (
-                `Active alerts only • ${selectedDate}`
-              )}
+           
+          </div>
+
+          {/* ✅ RIGHT SIDE: glossy KPI circles (like your image) */}
+          <div className="iHeaderRight">
+            <div className="kpiRow">
+              <KpiRing
+                color="blue"
+                value={statsLoading ? "…" : stats.total}
+                label="TOTAL"
+                sub={`${stats.active || 0} Active`}
+                percent={
+                  stats.total
+                    ? Math.min(100, ((stats.active || 0) / stats.total) * 100)
+                    : 0
+                }
+              />
+
+              <KpiRing
+                color="green"
+                value={statsLoading ? "…" : crowd.total || 0}
+                label="CROWD"
+                sub={`${crowd.active || 0} Active`}
+                percent={
+                  crowd.total
+                    ? Math.min(100, ((crowd.active || 0) / crowd.total) * 100)
+                    : 0
+                }
+              />
+
+              <KpiRing
+                color="red"
+                value={statsLoading ? "…" : unauth.total || 0}
+                label="UNAUTHORIZED"
+                sub={`${unauth.active || 0} Active`}
+                percent={
+                  unauth.total
+                    ? Math.min(100, ((unauth.active || 0) / unauth.total) * 100)
+                    : 0
+                }
+              />
+
+              <KpiRing
+                color="gray"
+                value={statsLoading ? "…" : otherTotal}
+                label="TAMPER"
+                sub={`${otherActive} Active`}
+                percent={
+                  otherTotal
+                    ? Math.min(100, (otherActive / otherTotal) * 100)
+                    : 0
+                }
+              />
+            </div>
+
+            <div className="iCount">
+              {loading ? `Loading…` : `Showing ${pageItems.length} / ${total}`}
             </div>
           </div>
-          <div className="iCount">{countText}</div>
         </div>
 
         {/* ✅ Scrollable grid area (ONLY HERE) */}
@@ -343,7 +462,6 @@ export default function IncidentsPage() {
                 const badgeText = isCrowd
                   ? "Crowd"
                   : String(type).replaceAll("_", " ");
-
                 const imgSrc = toImgSrc(a.image_base64 || "");
                 const showCounts = isCrowd;
                 const showResolveBtn = !isCrowd;
@@ -414,13 +532,29 @@ export default function IncidentsPage() {
           )}
         </div>
 
-        {/* ✅ Pagination INSIDE panel (fixed) */}
+        {/* ✅ Pagination (Rows moved here right side) */}
         <div className="iPager">
           <div className="iPagerLeft">
             Total: {total} • Page {safePage} / {totalPages}
           </div>
 
           <div className="iPagerRight">
+            {/* ✅ Rows dropdown here */}
+            <div className="iRowsMini">
+              <span>Rows</span>
+              <select
+                className="iSelect iRowsSelect"
+                value={pageSize}
+                onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
+              >
+                <option value={6}>6</option>
+                <option value={9}>9</option>
+                <option value={12}>12</option>
+                <option value={15}>15</option>
+                <option value={18}>18</option>
+              </select>
+            </div>
+
             <button
               className="iPageBtn"
               disabled={safePage <= 1}

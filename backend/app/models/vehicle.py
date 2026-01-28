@@ -20,7 +20,6 @@ class VehicleLog(Base):
 
     status = Column(String(32), nullable=True, default="on_site")
 
-    # ✅ DB columns
     capture_image_entry = Column(Text, nullable=True)  # LONGTEXT in MySQL
     capture_image_exit = Column(Text, nullable=True)   # LONGTEXT in MySQL
 

@@ -20,7 +20,7 @@ class VehicleLogCreate(BaseModel):
     capture_image_entry: Optional[str] = None
     capture_image_exit: Optional[str] = None
 
-    # ✅ old client support
+    # compatibility
     capture_image: Optional[str] = None
 
     entry_camera_name: Optional[str] = None
@@ -74,14 +74,13 @@ def push_vehicle_log(payload: VehicleLogCreate, db: Session = Depends(get_db)):
     try:
         data = payload.model_dump(by_alias=True)
 
-        # ✅ old key compatibility
         if (not data.get("capture_image_entry")) and data.get("capture_image"):
             data["capture_image_entry"] = data.get("capture_image")
 
         obj = vehicle_crud.upsert_vehicle_log_by_plate(db, data)
+
         if obj is None:
-            raise HTTPException(
-                status_code=500, detail="Vehicle log upsert returned None")
+            raise HTTPException(status_code=500, detail="Vehicle log upsert returned None")
 
         return obj
 
@@ -102,6 +101,7 @@ def get_vehicle_logs(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
+    # if only one date given, treat as same-day range
     if date_from and not date_to:
         date_to = date_from
     if date_to and not date_from:
@@ -116,5 +116,6 @@ def get_vehicle_logs(
         offset=offset,
     )
     total = vehicle_crud.count_vehicle_logs(
-        db, search=search, date_from=date_from, date_to=date_to)
+        db, search=search, date_from=date_from, date_to=date_to
+    )
     return {"items": items, "total": total, "limit": limit, "offset": offset}

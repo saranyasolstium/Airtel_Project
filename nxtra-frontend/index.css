@@ -1,5 +1,3 @@
-html, body, #root {
-  height: 100%;
-  margin: 0;
-  overflow: hidden; /* ✅ prevents whole page scroll */
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
